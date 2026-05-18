@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import AgencySidebar from '@/components/agency-sidebar'
 import type { Account } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -80,7 +81,9 @@ export default function AccountsPage() {
   }
 
   return (
-    <div>
+    <div className="flex min-h-screen">
+      <AgencySidebar />
+      <main className="flex-1 p-8 overflow-auto bg-gray-50">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
@@ -183,6 +186,7 @@ export default function AccountsPage() {
           </div>
         </form>
       </Modal>
+      </main>
     </div>
   )
 }
