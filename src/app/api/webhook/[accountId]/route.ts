@@ -50,7 +50,8 @@ export async function POST(
 
   // Determine source from tags or custom fields
   let source = 'other'
-  const tags = (body.tags || []) as string[]
+  const rawTags = body.tags
+  const tags = Array.isArray(rawTags) ? rawTags : typeof rawTags === 'string' ? [rawTags] : []
   const tagsLower = tags.map((t: string) => t.toLowerCase())
 
   if (tagsLower.some((t) => t.includes('facebook') || t.includes('fb'))) {
