@@ -1,5 +1,20 @@
+export interface Account {
+  id: string
+  name: string
+  slug: string
+  created_at: string
+  updated_at: string
+}
+
+export interface UserRole {
+  user_id: string
+  role: 'agency_admin' | 'sub_account'
+  account_id: string | null
+}
+
 export interface ApiKey {
   id: string
+  account_id: string
   service: string
   key_value: string
   extra_data: Record<string, unknown> | null
@@ -8,6 +23,7 @@ export interface ApiKey {
 
 export interface Persona {
   id: string
+  account_id: string
   name: string
   description: string
   characteristics: string
@@ -21,6 +37,7 @@ export interface Persona {
 
 export interface Lead {
   id: string
+  account_id: string
   highlevel_contact_id: string | null
   first_name: string | null
   last_name: string | null
