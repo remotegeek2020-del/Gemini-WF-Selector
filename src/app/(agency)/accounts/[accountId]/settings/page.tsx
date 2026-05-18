@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import type { AIProvider } from '@/types'
 
 interface ApiKeyEntry {
   id: string
@@ -21,13 +22,45 @@ interface ServiceConfig {
   fields?: { name: string; label: string; placeholder: string }[]
 }
 
+const PROVIDER_MODELS: Record<AIProvider, { value: string; label: string }[]> = {
+  gemini: [
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+  ],
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+    { value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+  ],
+  openrouter: [
+    { value: 'openai/gpt-4o', label: 'OpenAI GPT-4o' },
+    { value: 'anthropic/claude-3.5-sonnet', label: 'Anthropic Claude 3.5 Sonnet' },
+    { value: 'google/gemini-flash-1.5', label: 'Google Gemini Flash 1.5' },
+    { value: 'meta-llama/llama-3.1-70b-instruct', label: 'Meta Llama 3.1 70B' },
+  ],
+}
+
+const PROVIDER_OPTIONS: { value: AIProvider; label: string }[] = [
+  { value: 'gemini', label: 'Google Gemini' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic Claude' },
+  { value: 'openrouter', label: 'OpenRouter' },
+]
+
+const PROVIDER_KEY_LABELS: Record<AIProvider, string> = {
+  gemini: 'Gemini API Key',
+  openai: 'OpenAI API Key',
+  anthropic: 'Anthropic API Key',
+  openrouter: 'OpenRouter API Key',
+}
+
 const SERVICE_CONFIGS: ServiceConfig[] = [
-  {
-    service: 'gemini',
-    label: 'Google Gemini AI',
-    description: 'Used for lead analysis and persona assignment. Get your key at aistudio.google.com',
-    placeholder: 'AIzaSy...',
-  },
   {
     service: 'apollo',
     label: 'Apollo.io',
@@ -55,8 +88,12 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
 
+  // AI Model state
+  const [aiProvider, setAiProvider] = useState<AIProvider>('gemini')
+  const [aiModel, setAiModel] = useState<string>('gemini-1.5-flash')
+  const [aiApiKey, setAiApiKey] = useState<string>('')
+
   useEffect(() => {
-    // Generate a stable secret from accountId for display
     setWebhookSecret(accountId.replace(/-/g, '').substring(0, 16))
 
     const fetchKeys = async () => {
@@ -65,7 +102,16 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         const res = await fetch(`/api/accounts/${accountId}/settings`)
         if (!res.ok) throw new Error('Failed to fetch settings')
         const data = await res.json()
-        setExistingKeys(data.apiKeys || [])
+        const keys: ApiKeyEntry[] = data.apiKeys || []
+        setExistingKeys(keys)
+
+        // Pre-populate AI model settings if they exist
+        const aiModelEntry = keys.find((k) => k.service === 'ai_model')
+        if (aiModelEntry?.extra_data) {
+          const ed = aiModelEntry.extra_data as Record<string, string>
+          if (ed.provider) setAiProvider(ed.provider as AIProvider)
+          if (ed.model) setAiModel(ed.model)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings')
       } finally {
@@ -74,6 +120,12 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     }
     fetchKeys()
   }, [accountId])
+
+  // When provider changes, reset model to first option
+  const handleProviderChange = (provider: AIProvider) => {
+    setAiProvider(provider)
+    setAiModel(PROVIDER_MODELS[provider][0].value)
+  }
 
   const getExistingKey = (service: string): ApiKeyEntry | undefined =>
     existingKeys.find((k) => k.service === service)
@@ -96,6 +148,45 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         extra_data: { ...getFormValue(service).extra_data, [field]: value },
       },
     }))
+  }
+
+  const handleSaveAiModel = async () => {
+    if (!aiApiKey.trim()) {
+      setError('Please enter an API key for the selected AI provider')
+      return
+    }
+
+    setSavingService('ai_model')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: 'ai_model',
+          key_value: aiApiKey.trim(),
+          extra_data: { provider: aiProvider, model: aiModel },
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to save')
+      }
+
+      setSuccess('AI model settings saved successfully')
+      setAiApiKey('')
+
+      const refreshRes = await fetch(`/api/accounts/${accountId}/settings`)
+      const refreshData = await refreshRes.json()
+      setExistingKeys(refreshData.apiKeys || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save AI model settings')
+    } finally {
+      setSavingService(null)
+    }
   }
 
   const handleSave = async (service: string) => {
@@ -148,6 +239,8 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     navigator.clipboard.writeText(webhookUrl).catch(() => {})
   }
 
+  const existingAiModel = getExistingKey('ai_model')
+
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
@@ -199,6 +292,91 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         </div>
       ) : (
         <div className="space-y-4">
+          {/* AI Model Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>AI Model</CardTitle>
+                {existingAiModel && (
+                  <div className="flex items-center gap-1.5 text-xs text-green-600">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Configured
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-gray-500">
+                Select the AI provider and model used for lead analysis and persona assignment.
+              </p>
+
+              {existingAiModel && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-gray-500">Current:</span>
+                  <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-700">
+                    {String(existingAiModel.extra_data?.provider || 'gemini')} / {String(existingAiModel.extra_data?.model || 'gemini-1.5-flash')}
+                  </code>
+                  <span className="text-xs text-gray-400">
+                    Updated {new Date(existingAiModel.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {PROVIDER_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                  <select
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {PROVIDER_MODELS[aiProvider].map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <Input
+                  label={existingAiModel ? `Update ${PROVIDER_KEY_LABELS[aiProvider]}` : PROVIDER_KEY_LABELS[aiProvider]}
+                  type="password"
+                  value={aiApiKey}
+                  onChange={(e) => setAiApiKey(e.target.value)}
+                  placeholder="Enter your API key"
+                />
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  onClick={handleSaveAiModel}
+                  isLoading={savingService === 'ai_model'}
+                  size="sm"
+                >
+                  {existingAiModel ? 'Update AI Settings' : 'Save AI Settings'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Apollo and Highlevel sections */}
           {SERVICE_CONFIGS.map((config) => {
             const existing = getExistingKey(config.service)
             const formVal = getFormValue(config.service)

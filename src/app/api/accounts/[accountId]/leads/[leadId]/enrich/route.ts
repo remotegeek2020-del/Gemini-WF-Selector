@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import { runEnrichmentAgent } from '@/lib/gemini/agent'
+import { runEnrichmentAgent } from '@/lib/ai/agent'
 import { assignWorkflow } from '@/lib/highlevel/client'
+import type { AIConfig } from '@/types'
 
 export async function POST(
   _request: NextRequest,
@@ -49,12 +50,12 @@ export async function POST(
     .eq('id', leadId)
 
   try {
-    // Fetch API keys for this account
+    // Fetch API keys for this account (ai_model, apollo, highlevel; also gemini for fallback)
     const { data: apiKeysData, error: keysError } = await supabase
       .from('api_keys')
       .select('service, key_value, extra_data')
       .eq('account_id', accountId)
-      .in('service', ['gemini', 'apollo', 'highlevel'])
+      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel'])
 
     if (keysError) throw new Error(`Failed to fetch API keys: ${keysError.message}`)
 
@@ -62,12 +63,37 @@ export async function POST(
       (apiKeysData || []).map((k) => [k.service, k])
     )
 
-    const geminiKey = keyMap['gemini']?.key_value
     const apolloKey = keyMap['apollo']?.key_value
     const highlevelKey = keyMap['highlevel']?.key_value
 
-    if (!geminiKey) throw new Error('Gemini API key not configured. Please add it in Settings.')
     if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
+
+    // Build AIConfig — prefer 'ai_model' entry, fall back to legacy 'gemini' entry
+    let aiConfig: AIConfig
+
+    if (keyMap['ai_model']) {
+      const entry = keyMap['ai_model']
+      const extraData = (entry.extra_data || {}) as Record<string, string>
+      const provider = (extraData.provider || 'gemini') as AIConfig['provider']
+      const model = extraData.model || getDefaultModel(provider)
+
+      aiConfig = {
+        provider,
+        model,
+        apiKey: entry.key_value,
+      }
+    } else if (keyMap['gemini']) {
+      // Backward-compatible fallback
+      aiConfig = {
+        provider: 'gemini',
+        model: 'gemini-1.5-flash',
+        apiKey: keyMap['gemini'].key_value,
+      }
+    } else {
+      throw new Error(
+        'AI model API key not configured. Please add it in Settings.'
+      )
+    }
 
     // Fetch personas for this account
     const { data: personas, error: personasError } = await supabase
@@ -78,9 +104,9 @@ export async function POST(
 
     if (personasError) throw new Error(`Failed to fetch personas: ${personasError.message}`)
 
-    // Run Gemini enrichment agent
+    // Run enrichment agent with the selected provider
     const result = await runEnrichmentAgent(
-      geminiKey,
+      aiConfig,
       apolloKey,
       {
         firstName: lead.first_name,
@@ -147,5 +173,20 @@ export async function POST(
       .eq('id', leadId)
 
     return NextResponse.json({ error: errorMessage }, { status: 500 })
+  }
+}
+
+function getDefaultModel(provider: AIConfig['provider']): string {
+  switch (provider) {
+    case 'gemini':
+      return 'gemini-1.5-flash'
+    case 'openai':
+      return 'gpt-4o'
+    case 'anthropic':
+      return 'claude-sonnet-4-5'
+    case 'openrouter':
+      return 'openai/gpt-4o'
+    default:
+      return 'gemini-1.5-flash'
   }
 }

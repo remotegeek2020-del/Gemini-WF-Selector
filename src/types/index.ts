@@ -133,6 +133,14 @@ export interface ApolloOrganization {
   country?: string
 }
 
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter'
+
+export interface AIConfig {
+  provider: AIProvider
+  model: string
+  apiKey: string
+}
+
 export interface ReportSummary {
   total: number
   assigned: number
