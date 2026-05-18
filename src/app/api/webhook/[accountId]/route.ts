@@ -3,6 +3,10 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
+export async function GET() {
+  return NextResponse.json({ status: 'ok' }, { status: 200 })
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { accountId: string } }
