@@ -178,14 +178,14 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
                 </td>
                 <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
-                    {(lead.status === 'pending' || lead.status === 'failed') && onEnrich && (
+                    {onEnrich && lead.status !== 'enriching' && (
                       <Button
                         size="sm"
                         variant="secondary"
                         isLoading={enrichingIds.has(lead.id)}
                         onClick={() => handleEnrich(lead.id)}
                       >
-                        Enrich
+                        {lead.status === 'pending' ? 'Enrich' : 'Re-enrich'}
                       </Button>
                     )}
                     {lead.workflow_triggered && (
