@@ -155,10 +155,21 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
           {personas.map((persona) => (
             <Card key={persona.id} className="flex flex-col">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-                <span
-                  className="w-4 h-4 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: persona.color }}
-                />
+                {persona.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={persona.avatar_url}
+                    alt={persona.name}
+                    className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-gray-200"
+                  />
+                ) : (
+                  <span
+                    className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-semibold"
+                    style={{ backgroundColor: persona.color }}
+                  >
+                    {persona.name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'}
+                  </span>
+                )}
                 <h3 className="font-semibold text-gray-900 flex-1 truncate">{persona.name}</h3>
                 {persona.is_default && (
                   <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex-shrink-0">

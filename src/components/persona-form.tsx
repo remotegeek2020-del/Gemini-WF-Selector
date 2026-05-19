@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Persona } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
@@ -64,12 +64,19 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [isSaving, setIsSaving] = useState(false)
 
-  // AI generation state
+  // AI text generation state
   const [aiEnabled, setAiEnabled] = useState(false)
   const [aiPanelOpen, setAiPanelOpen] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+
+  // Avatar state
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (persona) {
@@ -85,6 +92,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         color: persona.color || '#6366f1',
         is_default: persona.is_default || false,
       })
+      setAvatarUrl(persona.avatar_url || null)
     } else {
       setForm({
         name: '',
@@ -98,17 +106,18 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         color: '#6366f1',
         is_default: false,
       })
+      setAvatarUrl(null)
     }
     setErrors({})
     setAiPrompt('')
     setAiError(null)
     setAiPanelOpen(false)
+    setAvatarError(null)
   }, [persona, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
 
-    // Check workflows
     setWorkflowsLoading(true)
     setWorkflowsError(null)
     fetch(`/api/accounts/${accountId}/highlevel/workflows`)
@@ -120,7 +129,6 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       .catch(() => setWorkflowsError('Failed to load workflows'))
       .finally(() => setWorkflowsLoading(false))
 
-    // Check AI generation availability for this account
     fetch(`/api/agency/persona-gen-ai?accountId=${accountId}`)
       .then((r) => r.json())
       .then((data) => setAiEnabled(data.enabled === true))
@@ -192,6 +200,61 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
     }
   }
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !persona) return
+
+    setIsUploadingAvatar(true)
+    setAvatarError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/accounts/${accountId}/personas/${persona.id}/avatar`, {
+        method: 'POST',
+        body: fd,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      setAvatarUrl(`${data.avatar_url}?t=${Date.now()}`)
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setIsUploadingAvatar(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleAvatarGenerate = async () => {
+    if (!persona) return
+    setIsGeneratingAvatar(true)
+    setAvatarError(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/personas/${persona.id}/avatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generate: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      setAvatarUrl(`${data.avatar_url}?t=${Date.now()}`)
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Avatar generation failed')
+    } finally {
+      setIsGeneratingAvatar(false)
+    }
+  }
+
+  const handleAvatarRemove = async () => {
+    if (!persona) return
+    setAvatarError(null)
+    try {
+      await fetch(`/api/accounts/${accountId}/personas/${persona.id}/avatar`, { method: 'DELETE' })
+      setAvatarUrl(null)
+    } catch {
+      setAvatarError('Failed to remove avatar')
+    }
+  }
+
   const handleChange = (field: keyof FormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -201,6 +264,13 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
     }
   }
 
+  const initials = form.name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || '?'
+
   return (
     <Modal
       isOpen={isOpen}
@@ -209,6 +279,90 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Avatar section */}
+        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          {/* Avatar preview */}
+          <div className="relative flex-shrink-0">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt={form.name}
+                className="w-16 h-16 rounded-full object-cover border-2 border-white shadow"
+              />
+            ) : (
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow"
+                style={{ backgroundColor: form.color }}
+              >
+                {initials}
+              </div>
+            )}
+            {(isUploadingAvatar || isGeneratingAvatar) && (
+              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-700 mb-1">Avatar</p>
+            {persona ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar || isGeneratingAvatar}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Upload
+                </button>
+                {aiEnabled && (
+                  <button
+                    type="button"
+                    onClick={handleAvatarGenerate}
+                    disabled={isUploadingAvatar || isGeneratingAvatar}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    {isGeneratingAvatar ? 'Generating…' : 'Generate with AI'}
+                  </button>
+                )}
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleAvatarRemove}
+                    disabled={isUploadingAvatar || isGeneratingAvatar}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">Save the persona first, then come back to add an avatar.</p>
+            )}
+            {avatarError && (
+              <p className="text-xs text-red-600 mt-1">{avatarError}</p>
+            )}
+          </div>
+        </div>
 
         {/* AI Generate panel */}
         {aiEnabled && (
