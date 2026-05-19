@@ -24,10 +24,10 @@ interface ServiceConfig {
 
 const PROVIDER_MODELS: Record<AIProvider, { value: string; label: string }[]> = {
   gemini: [
-    { value: 'gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
-    { value: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
