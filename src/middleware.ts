@@ -14,8 +14,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow account setup via invite token
-  if (pathname === '/setup') {
+  // Allow account setup via invite token (page + the two APIs it calls)
+  if (
+    pathname === '/setup' ||
+    pathname === '/api/agency/invites/verify' ||
+    pathname === '/api/agency/invites/accept'
+  ) {
     return NextResponse.next()
   }
 
