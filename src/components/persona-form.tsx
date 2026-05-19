@@ -7,14 +7,14 @@ import { Input, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 
 const PRESET_COLORS = [
-  '#6366f1', // indigo
-  '#8b5cf6', // purple
-  '#ec4899', // pink
-  '#f59e0b', // amber
-  '#10b981', // emerald
-  '#06b6d4', // cyan
-  '#ef4444', // red
-  '#f97316', // orange
+  '#6366f1',
+  '#8b5cf6',
+  '#ec4899',
+  '#f59e0b',
+  '#10b981',
+  '#06b6d4',
+  '#ef4444',
+  '#f97316',
 ]
 
 interface PersonaFormProps {
@@ -60,6 +60,13 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [isSaving, setIsSaving] = useState(false)
 
+  // AI generation state
+  const [aiEnabled, setAiEnabled] = useState(false)
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
   useEffect(() => {
     if (persona) {
       setForm({
@@ -85,10 +92,15 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       })
     }
     setErrors({})
+    setAiPrompt('')
+    setAiError(null)
+    setAiPanelOpen(false)
   }, [persona, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
+
+    // Check workflows
     setWorkflowsLoading(true)
     setWorkflowsError(null)
     fetch(`/api/accounts/${accountId}/highlevel/workflows`)
@@ -99,6 +111,12 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       })
       .catch(() => setWorkflowsError('Failed to load workflows'))
       .finally(() => setWorkflowsLoading(false))
+
+    // Check AI generation availability
+    fetch('/api/agency/persona-gen-ai')
+      .then((r) => r.json())
+      .then((data) => setAiEnabled(data.enabled === true))
+      .catch(() => setAiEnabled(false))
   }, [isOpen, accountId])
 
   const validate = (): boolean => {
@@ -135,6 +153,32 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
     }
   }
 
+  const handleGenerate = async () => {
+    if (!aiPrompt.trim()) return
+    setIsGenerating(true)
+    setAiError(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/personas/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      setForm((prev) => ({
+        ...prev,
+        name: data.name || prev.name,
+        description: data.description || prev.description,
+        characteristics: data.characteristics || prev.characteristics,
+      }))
+      setAiPanelOpen(false)
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Generation failed')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   const handleChange = (field: keyof FormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -152,6 +196,60 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* AI Generate panel */}
+        {aiEnabled && (
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setAiPanelOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-indigo-800 hover:bg-indigo-100 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Generate with AI
+              </span>
+              <svg
+                className={`w-4 h-4 transition-transform ${aiPanelOpen ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {aiPanelOpen && (
+              <div className="px-4 pb-4 space-y-3">
+                <p className="text-xs text-indigo-600">
+                  Describe your target audience and the AI will generate the persona name, description, and characteristics for you.
+                </p>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g. VP-level executives at mid-size SaaS companies evaluating HR software, usually have 50-500 employees, need to justify ROI to the CFO..."
+                  rows={3}
+                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
+                />
+                {aiError && (
+                  <p className="text-xs text-red-600">{aiError}</p>
+                )}
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleGenerate}
+                    isLoading={isGenerating}
+                    disabled={!aiPrompt.trim()}
+                  >
+                    {isGenerating ? 'Generating…' : 'Generate'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <Input
           label="Name *"
           value={form.name}
@@ -213,9 +311,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
                 {workflows
                   .filter((w) => w.status === 'published')
                   .map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
+                    <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 {workflows.some((w) => w.status !== 'published') && (
                   <>
@@ -223,9 +319,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
                     {workflows
                       .filter((w) => w.status !== 'published')
                       .map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name} (draft)
-                        </option>
+                        <option key={w.id} value={w.id}>{w.name} (draft)</option>
                       ))}
                   </>
                 )}

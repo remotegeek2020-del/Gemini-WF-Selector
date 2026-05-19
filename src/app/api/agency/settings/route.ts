@@ -55,19 +55,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { email_config } = body
-  if (!email_config) {
-    return NextResponse.json({ error: 'email_config is required' }, { status: 400 })
+  const { email_config, persona_gen_ai } = body
+
+  if (!email_config && !persona_gen_ai) {
+    return NextResponse.json({ error: 'Nothing to save' }, { status: 400 })
   }
 
   const admin = createAdminClient()
-  const { error: upsertError } = await admin.from('agency_settings').upsert(
-    { key: 'email_config', value: email_config, updated_at: new Date().toISOString() },
-    { onConflict: 'key' }
-  )
+  const upserts: { key: string; value: unknown }[] = []
 
-  if (upsertError) {
-    return NextResponse.json({ error: upsertError.message }, { status: 500 })
+  if (email_config) upserts.push({ key: 'email_config', value: email_config })
+  if (persona_gen_ai !== undefined) upserts.push({ key: 'persona_gen_ai', value: persona_gen_ai })
+
+  for (const row of upserts) {
+    const { error: upsertError } = await admin.from('agency_settings').upsert(
+      { key: row.key, value: row.value, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    if (upsertError) {
+      return NextResponse.json({ error: upsertError.message }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ success: true })
