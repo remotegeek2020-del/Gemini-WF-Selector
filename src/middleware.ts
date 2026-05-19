@@ -14,6 +14,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Allow account setup via invite token
+  if (pathname === '/setup') {
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -69,6 +74,14 @@ export async function middleware(request: NextRequest) {
       )
     }
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Agency admin-only pages
+  if (
+    (pathname.startsWith('/agency-settings') || pathname.startsWith('/agency-users')) &&
+    role !== 'agency_admin'
+  ) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   // sub_account restrictions: redirect /accounts (list) to their own account
