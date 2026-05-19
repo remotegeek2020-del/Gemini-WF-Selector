@@ -47,6 +47,26 @@ const apolloTools: Tool[] = [
   },
 ]
 
+function isRetryableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('overloaded')
+}
+
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastError = err
+      if (!isRetryableError(err) || attempt === maxAttempts) throw err
+      const delay = attempt * 3000
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError
+}
+
 export async function runGeminiAgent(
   config: AIConfig,
   apolloApiKey: string,
@@ -63,7 +83,7 @@ export async function runGeminiAgent(
   const chat = model.startChat()
   let enrichedData: Record<string, unknown> = {}
 
-  const initialResponse = await chat.sendMessage(buildLeadSummary(lead))
+  const initialResponse = await withRetry(() => chat.sendMessage(buildLeadSummary(lead)))
   let result = initialResponse.response
 
   // Agentic loop
@@ -74,7 +94,8 @@ export async function runGeminiAgent(
     const functionCalls = result.functionCalls()
     if (!functionCalls || functionCalls.length === 0) break
 
-    const functionResponses = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const functionResponses: any[] = []
 
     for (const call of functionCalls) {
       if (call.name === 'apollo_enrich_person') {
@@ -106,7 +127,7 @@ export async function runGeminiAgent(
       }
     }
 
-    const functionResult = await chat.sendMessage(functionResponses)
+    const functionResult = await withRetry(() => chat.sendMessage(functionResponses))
     result = functionResult.response
     iteration++
   }
