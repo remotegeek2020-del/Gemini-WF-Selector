@@ -11,6 +11,7 @@ interface AgencyUser {
   user_id: string
   email: string
   created_at: string
+  last_sign_in_at: string | null
 }
 
 interface PendingInvite {
@@ -217,6 +218,7 @@ export default function AgencyUsersPage() {
                       <tr className="border-b border-gray-200">
                         <th className="text-left pb-3 font-medium text-gray-600">Email</th>
                         <th className="text-left pb-3 font-medium text-gray-600">Created</th>
+                        <th className="text-left pb-3 font-medium text-gray-600">Last Active</th>
                         <th className="pb-3" />
                       </tr>
                     </thead>
@@ -225,6 +227,11 @@ export default function AgencyUsersPage() {
                         <tr key={u.user_id}>
                           <td className="py-3 text-gray-900">{u.email}</td>
                           <td className="py-3 text-gray-500">{formatDate(u.created_at)}</td>
+                          <td className="py-3 text-gray-500">
+                            {u.last_sign_in_at ? formatDate(u.last_sign_in_at) : (
+                              <span className="text-gray-400 italic">Never</span>
+                            )}
+                          </td>
                           <td className="py-3 text-right">
                             <Button
                               variant="danger"

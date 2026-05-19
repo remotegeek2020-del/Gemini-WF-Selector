@@ -41,6 +41,7 @@ export async function GET() {
         user_id,
         email: data.user.email ?? '',
         created_at: data.user.created_at,
+        last_sign_in_at: data.user.last_sign_in_at ?? null,
       }
     })
   )
