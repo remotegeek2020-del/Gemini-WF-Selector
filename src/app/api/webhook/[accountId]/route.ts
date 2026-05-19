@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function GET() {
   return NextResponse.json({ status: 'ok' }, { status: 200 })
@@ -23,7 +23,7 @@ export async function POST(
   }
 
   // Verify account exists
-  const supabase = createServerClient()
+  const supabase = createAdminClient()
   const { data: account, error: accountError } = await supabase
     .from('accounts')
     .select('id')
