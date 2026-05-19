@@ -25,16 +25,19 @@ export async function lushaEnrichPerson(
   params: LushaEnrichParams
 ): Promise<LushaEnrichResponse> {
   try {
-    const query = new URLSearchParams({ api_key: apiKey })
+    const query = new URLSearchParams()
     if (params.linkedinUrl) query.set('linkedinUrl', params.linkedinUrl)
+    if (params.email) query.set('email', params.email)
     if (params.firstName) query.set('firstName', params.firstName)
     if (params.lastName) query.set('lastName', params.lastName)
-    if (params.company) query.set('company', params.company)
-    if (params.email) query.set('email', params.email)
+    if (params.company) query.set('companyName', params.company)
 
     const response = await fetch(`https://api.lusha.com/v2/person?${query.toString()}`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'api_key': apiKey,
+        'Content-Type': 'application/json',
+      },
     })
 
     if (!response.ok) {
