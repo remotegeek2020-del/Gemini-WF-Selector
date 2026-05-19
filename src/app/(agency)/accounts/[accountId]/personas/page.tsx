@@ -187,6 +187,7 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
         onClose={handleCloseForm}
         onSave={handleSave}
         persona={editingPersona}
+        accountId={accountId}
       />
     </div>
   )

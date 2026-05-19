@@ -22,6 +22,7 @@ interface PersonaFormProps {
   onClose: () => void
   onSave: (data: Partial<Persona>) => Promise<void>
   persona?: Persona | null
+  accountId: string
 }
 
 interface FormData {
@@ -35,7 +36,16 @@ interface FormData {
   is_default: boolean
 }
 
-export default function PersonaForm({ isOpen, onClose, onSave, persona }: PersonaFormProps) {
+interface HLWorkflow {
+  id: string
+  name: string
+  status: string
+}
+
+export default function PersonaForm({ isOpen, onClose, onSave, persona, accountId }: PersonaFormProps) {
+  const [workflows, setWorkflows] = useState<HLWorkflow[]>([])
+  const [workflowsLoading, setWorkflowsLoading] = useState(false)
+  const [workflowsError, setWorkflowsError] = useState<string | null>(null)
   const [form, setForm] = useState<FormData>({
     name: '',
     description: '',
@@ -75,6 +85,20 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
     }
     setErrors({})
   }, [persona, isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    setWorkflowsLoading(true)
+    setWorkflowsError(null)
+    fetch(`/api/accounts/${accountId}/highlevel/workflows`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error) setWorkflowsError(data.error)
+        else setWorkflows(data.workflows || [])
+      })
+      .catch(() => setWorkflowsError('Failed to load workflows'))
+      .finally(() => setWorkflowsLoading(false))
+  }, [isOpen, accountId])
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof FormData, string>> = {}
@@ -161,20 +185,51 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
 
         <div className="border-t border-gray-200 pt-4">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Highlevel Workflow</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Workflow ID"
-              value={form.highlevel_workflow_id}
-              onChange={handleChange('highlevel_workflow_id')}
-              placeholder="hl_workflow_xxx"
-            />
-            <Input
-              label="Workflow Name"
-              value={form.highlevel_workflow_name}
-              onChange={handleChange('highlevel_workflow_name')}
-              placeholder="e.g. Enterprise Follow-up"
-            />
-          </div>
+          {workflowsError ? (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              {workflowsError} — configure your Highlevel key &amp; Location ID in Settings.
+            </p>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Workflow</label>
+              <select
+                value={form.highlevel_workflow_id}
+                onChange={(e) => {
+                  const selected = workflows.find((w) => w.id === e.target.value)
+                  setForm((prev) => ({
+                    ...prev,
+                    highlevel_workflow_id: e.target.value,
+                    highlevel_workflow_name: selected?.name || '',
+                  }))
+                }}
+                disabled={workflowsLoading}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">
+                  {workflowsLoading ? 'Loading workflows…' : '— No workflow —'}
+                </option>
+                {workflows
+                  .filter((w) => w.status === 'published')
+                  .map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                {workflows.some((w) => w.status !== 'published') && (
+                  <>
+                    <option disabled>── Drafts ──</option>
+                    {workflows
+                      .filter((w) => w.status !== 'published')
+                      .map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name} (draft)
+                        </option>
+                      ))}
+                  </>
+                )}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between py-2 px-3 bg-amber-50 border border-amber-200 rounded-lg">
