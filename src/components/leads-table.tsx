@@ -208,7 +208,17 @@ export default function LeadsTable({ leads, onEnrich }: LeadsTableProps) {
                                   <dt className="text-gray-500 capitalize min-w-[120px]">
                                     {k.replace(/_/g, ' ')}:
                                   </dt>
-                                  <dd className="text-gray-800">{String(v ?? '—')}</dd>
+                                  <dd className="text-gray-800">
+                                    {Array.isArray(v)
+                                      ? v.map((item, i) =>
+                                          typeof item === 'object' && item !== null
+                                            ? <span key={i} className="block text-xs">{Object.entries(item).filter(([,val]) => val).map(([ik, iv]) => `${ik}: ${iv}`).join(' · ')}</span>
+                                            : <span key={i}>{String(item)}</span>
+                                        )
+                                      : typeof v === 'object' && v !== null
+                                      ? JSON.stringify(v)
+                                      : String(v ?? '—')}
+                                  </dd>
                                 </div>
                               ))}
                           </dl>

@@ -132,8 +132,8 @@ export async function POST(
       })
       .eq('id', leadId)
 
-    // Trigger Highlevel workflow if persona assigned
-    if (result.persona_id && highlevelKey && lead.highlevel_contact_id) {
+    // Trigger Highlevel workflow only if a persona was actually matched
+    if (result.persona_id && finalStatus === 'assigned' && highlevelKey && lead.highlevel_contact_id) {
       const matchedPersona = (personas || []).find((p) => p.id === result.persona_id)
       if (matchedPersona?.highlevel_workflow_id) {
         const workflowResult = await assignWorkflow(
