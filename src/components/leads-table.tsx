@@ -232,7 +232,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
                       {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (() => {
                         const raw = lead.enriched_data as Record<string, unknown>
                         const apolloEntries = Object.entries(raw).filter(([k]) => !k.startsWith('lusha_') && k !== 'apollo_raw' && k !== 'lusha_raw')
-                        const lushaEntries = Object.entries(raw).filter(([k]) => k.startsWith('lusha_'))
+                        const lushaEntries = Object.entries(raw).filter(([k]) => k.startsWith('lusha_') && k !== 'lusha_raw')
                         const hasLusha = lushaEntries.length > 0
 
                         const renderValue = (v: unknown) => {

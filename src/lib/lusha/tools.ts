@@ -26,7 +26,13 @@ export async function lushaEnrichPerson(
 ): Promise<LushaEnrichResponse> {
   try {
     const query = new URLSearchParams()
-    if (params.linkedinUrl) query.set('linkedinUrl', params.linkedinUrl)
+    if (params.linkedinUrl) {
+      // Normalize LinkedIn URL to https and remove trailing slashes
+      const normalized = params.linkedinUrl
+        .replace(/^http:\/\//, 'https://')
+        .replace(/\/$/, '')
+      query.set('linkedinUrl', normalized)
+    }
     if (params.email) query.set('email', params.email)
     if (params.firstName) query.set('firstName', params.firstName)
     if (params.lastName) query.set('lastName', params.lastName)
