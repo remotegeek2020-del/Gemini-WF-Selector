@@ -119,26 +119,37 @@ export async function POST(
       personas || []
     )
 
-    const finalStatus = result.persona_id ? 'assigned' : 'no_persona'
+    let assignedPersonaId = result.persona_id
+    let reasoning = result.reasoning
+
+    if (!assignedPersonaId) {
+      const defaultPersona = (personas || []).find((p) => p.is_default)
+      if (defaultPersona) {
+        assignedPersonaId = defaultPersona.id
+        reasoning = `${reasoning}\n\n[Assigned to default persona "${defaultPersona.name}" as no specific persona matched.]`
+      }
+    }
+
+    const finalStatus = assignedPersonaId ? 'assigned' : 'no_persona'
 
     await supabase
       .from('leads')
       .update({
         enriched_data: result.enriched_data,
-        assigned_persona_id: result.persona_id,
-        persona_reasoning: result.reasoning,
+        assigned_persona_id: assignedPersonaId,
+        persona_reasoning: reasoning,
         status: finalStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', leadId)
 
-    // Trigger Highlevel workflow only if a persona was actually matched
-    if (result.persona_id && finalStatus === 'assigned' && highlevelKey && lead.highlevel_contact_id) {
-      const matchedPersona = (personas || []).find((p) => p.id === result.persona_id)
+    // Trigger Highlevel workflow only if a persona was matched or defaulted
+    if (assignedPersonaId && finalStatus === 'assigned' && highlevelKey && lead.highlevel_contact_id) {
+      const matchedPersona = (personas || []).find((p) => p.id === assignedPersonaId)
       if (matchedPersona?.highlevel_workflow_id) {
         const workflowResult = await assignWorkflow(
           highlevelKey,
-          lead.highlevel_contact_id,
+          lead.highlevel_contact_id!,
           matchedPersona.highlevel_workflow_id
         )
 

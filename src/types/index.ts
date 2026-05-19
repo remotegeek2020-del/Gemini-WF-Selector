@@ -31,6 +31,7 @@ export interface Persona {
   highlevel_workflow_id: string | null
   highlevel_workflow_name: string | null
   color: string
+  is_default: boolean
   created_at: string
   updated_at: string
 }

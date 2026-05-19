@@ -34,9 +34,17 @@ Instructions:
 - Use email if available, otherwise use name and company from raw data
 - After enrichment, carefully analyze: job title, seniority level, company size, industry, and career history
 - Choose the single best matching persona based on the enriched data
-- If no persona is a good match, return persona_id as null with explanation
-- Your reasoning should be specific and reference actual data points from the enrichment
-- Be decisive - pick the best match even if it's not perfect`
+- If no persona is a good match, return persona_id as null with a clear explanation of why none fit
+
+When assigning a persona, your final response MUST follow this exact format:
+Assigned Persona: [Persona Name]
+Persona ID: [persona UUID]
+Reasoning: [2-4 sentences explaining specifically why this persona matches, referencing the lead's actual job title, company, industry, and seniority from the enriched data]
+
+When no persona matches, your final response MUST follow this exact format:
+Assigned Persona: None
+Persona ID: null
+Reasoning: [2-4 sentences explaining specifically why none of the personas fit, referencing the lead's actual data]`
 }
 
 export function buildLeadSummary(lead: LeadData): string {

@@ -32,6 +32,7 @@ interface FormData {
   highlevel_workflow_id: string
   highlevel_workflow_name: string
   color: string
+  is_default: boolean
 }
 
 export default function PersonaForm({ isOpen, onClose, onSave, persona }: PersonaFormProps) {
@@ -43,6 +44,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
     highlevel_workflow_id: '',
     highlevel_workflow_name: '',
     color: '#6366f1',
+    is_default: false,
   })
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [isSaving, setIsSaving] = useState(false)
@@ -57,6 +59,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
         highlevel_workflow_id: persona.highlevel_workflow_id || '',
         highlevel_workflow_name: persona.highlevel_workflow_name || '',
         color: persona.color || '#6366f1',
+        is_default: persona.is_default || false,
       })
     } else {
       setForm({
@@ -67,6 +70,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
         highlevel_workflow_id: '',
         highlevel_workflow_name: '',
         color: '#6366f1',
+        is_default: false,
       })
     }
     setErrors({})
@@ -95,6 +99,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
         highlevel_workflow_id: form.highlevel_workflow_id.trim() || null,
         highlevel_workflow_name: form.highlevel_workflow_name.trim() || null,
         color: form.color,
+        is_default: form.is_default,
       })
       onClose()
     } catch (err) {
@@ -170,6 +175,28 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona }: Person
               placeholder="e.g. Enterprise Follow-up"
             />
           </div>
+        </div>
+
+        <div className="flex items-center justify-between py-2 px-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div>
+            <p className="text-sm font-medium text-amber-900">Default fallback persona</p>
+            <p className="text-xs text-amber-700 mt-0.5">Leads with no persona match will be assigned here</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.is_default}
+            onClick={() => setForm((prev) => ({ ...prev, is_default: !prev.is_default }))}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+              form.is_default ? 'bg-amber-500' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                form.is_default ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
         </div>
 
         <div>

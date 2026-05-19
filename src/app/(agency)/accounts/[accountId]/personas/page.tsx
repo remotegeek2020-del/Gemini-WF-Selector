@@ -134,6 +134,11 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
                   style={{ backgroundColor: persona.color }}
                 />
                 <h3 className="font-semibold text-gray-900 flex-1 truncate">{persona.name}</h3>
+                {persona.is_default && (
+                  <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex-shrink-0">
+                    Default
+                  </span>
+                )}
               </div>
               <div className="px-5 py-4 flex-1 space-y-3">
                 <div>

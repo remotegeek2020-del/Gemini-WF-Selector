@@ -38,7 +38,17 @@ export async function PUT(
     highlevel_workflow_id,
     highlevel_workflow_name,
     color,
+    is_default,
   } = body
+
+  if (is_default) {
+    await supabase
+      .from('personas')
+      .update({ is_default: false })
+      .eq('account_id', params.accountId)
+      .eq('is_default', true)
+      .neq('id', params.personaId)
+  }
 
   const { data, error } = await supabase
     .from('personas')
@@ -50,6 +60,7 @@ export async function PUT(
       highlevel_workflow_id: highlevel_workflow_id || null,
       highlevel_workflow_name: highlevel_workflow_name || null,
       color,
+      is_default: is_default === true,
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.personaId)

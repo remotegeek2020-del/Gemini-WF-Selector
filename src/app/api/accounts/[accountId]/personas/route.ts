@@ -69,6 +69,7 @@ export async function POST(
     highlevel_workflow_id,
     highlevel_workflow_name,
     color,
+    is_default,
   } = body
 
   if (!name || !description || !characteristics) {
@@ -76,6 +77,14 @@ export async function POST(
       { error: 'Name, description, and characteristics are required' },
       { status: 400 }
     )
+  }
+
+  if (is_default) {
+    await supabase
+      .from('personas')
+      .update({ is_default: false })
+      .eq('account_id', params.accountId)
+      .eq('is_default', true)
   }
 
   const { data, error } = await supabase
@@ -89,6 +98,7 @@ export async function POST(
       highlevel_workflow_id: highlevel_workflow_id || null,
       highlevel_workflow_name: highlevel_workflow_name || null,
       color: color || '#6366f1',
+      is_default: is_default === true,
     })
     .select()
     .single()
