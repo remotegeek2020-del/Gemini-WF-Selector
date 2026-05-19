@@ -60,7 +60,7 @@ export async function POST(
       .from('api_keys')
       .select('service, key_value, extra_data')
       .eq('account_id', accountId)
-      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel'])
+      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha'])
 
     if (keysError) throw new Error(`Failed to fetch API keys: ${keysError.message}`)
 
@@ -70,6 +70,7 @@ export async function POST(
 
     const apolloKey = keyMap['apollo']?.key_value
     const highlevelKey = keyMap['highlevel']?.key_value
+    const lushaKey = keyMap['lusha']?.key_value || undefined
 
     if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
 
@@ -121,7 +122,8 @@ export async function POST(
         source: lead.source,
         rawData: lead.raw_data,
       },
-      personas || []
+      personas || [],
+      lushaKey
     )
 
     let assignedPersonaId = result.persona_id

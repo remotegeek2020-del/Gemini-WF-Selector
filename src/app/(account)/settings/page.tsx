@@ -70,6 +70,12 @@ const SERVICE_CONFIGS: ServiceConfig[] = [
     placeholder: 'your-apollo-api-key',
   },
   {
+    service: 'lusha',
+    label: 'Lusha (Optional)',
+    description: 'Secondary enrichment after Apollo. Lusha specializes in direct emails and phone numbers — especially useful when leads use alternate emails. Triggered automatically when configured.',
+    placeholder: 'your-lusha-api-key',
+  },
+  {
     service: 'highlevel',
     label: 'Highlevel (GHL)',
     description: 'Used to trigger workflows for assigned leads.',

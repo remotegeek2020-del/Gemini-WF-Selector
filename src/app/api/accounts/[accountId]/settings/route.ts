@@ -66,7 +66,7 @@ export async function POST(
     return NextResponse.json({ error: 'Service and key_value are required' }, { status: 400 })
   }
 
-  const validServices = ['ai_model', 'gemini', 'apollo', 'highlevel']
+  const validServices = ['ai_model', 'gemini', 'apollo', 'lusha', 'highlevel']
   if (!validServices.includes(service as string)) {
     return NextResponse.json(
       { error: `Invalid service. Must be one of: ${validServices.join(', ')}` },

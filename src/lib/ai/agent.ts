@@ -11,7 +11,8 @@ export async function runEnrichmentAgent(
   config: AIConfig,
   apolloApiKey: string,
   lead: LeadData,
-  personas: Persona[]
+  personas: Persona[],
+  lushaApiKey?: string
 ): Promise<EnrichmentResult> {
   if (!personas || personas.length === 0) {
     return {
@@ -23,13 +24,13 @@ export async function runEnrichmentAgent(
 
   switch (config.provider) {
     case 'gemini':
-      return runGeminiAgent(config, apolloApiKey, lead, personas)
+      return runGeminiAgent(config, apolloApiKey, lead, personas, lushaApiKey)
     case 'openai':
-      return runOpenAIAgent(config, apolloApiKey, lead, personas)
+      return runOpenAIAgent(config, apolloApiKey, lead, personas, lushaApiKey)
     case 'anthropic':
-      return runAnthropicAgent(config, apolloApiKey, lead, personas)
+      return runAnthropicAgent(config, apolloApiKey, lead, personas, lushaApiKey)
     case 'openrouter':
-      return runOpenRouterAgent(config, apolloApiKey, lead, personas)
+      return runOpenRouterAgent(config, apolloApiKey, lead, personas, lushaApiKey)
     default: {
       const _exhaustive: never = config.provider
       throw new Error(`Unsupported AI provider: ${_exhaustive}`)
