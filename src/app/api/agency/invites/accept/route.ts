@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'This invite has already been used' }, { status: 400 })
   }
 
-  if (invite.expires_at < now) {
+  if (!invite.expires_at || new Date(invite.expires_at) < new Date()) {
     return NextResponse.json({ error: 'This invite has expired' }, { status: 400 })
   }
 

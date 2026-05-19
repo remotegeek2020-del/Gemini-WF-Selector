@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient()
-  const now = new Date().toISOString()
 
   const { data: invite, error } = await admin
     .from('agency_invites')
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ valid: false, error: 'This invite has already been used' })
   }
 
-  if (invite.expires_at < now) {
+  if (!invite.expires_at || new Date(invite.expires_at) < new Date()) {
     return NextResponse.json({ valid: false, error: 'This invite has expired' })
   }
 
