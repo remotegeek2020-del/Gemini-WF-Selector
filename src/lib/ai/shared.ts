@@ -76,12 +76,20 @@ export function extractPersonaFromText(finalText: string, personas: Persona[]): 
     'does not match',
     'none of the personas',
     'no suitable persona',
+    'not a good match',
+    'not suitable',
+    'unsuitable',
+    'not a match',
+    'persona_id: null',
+    'persona id: null',
+    'not appropriate',
+    'not an appropriate',
   ]
   const lowerText = finalText.toLowerCase()
-  if (noMatchPhrases.some((phrase) => lowerText.includes(phrase))) {
-    if (!assignedPersonaId) {
-      return null
-    }
+  const explicitNoMatch = noMatchPhrases.some((phrase) => lowerText.includes(phrase))
+
+  if (explicitNoMatch) {
+    return null
   }
 
   // If no UUID found but model gave text, try to match persona by name
