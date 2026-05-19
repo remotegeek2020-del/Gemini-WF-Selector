@@ -137,6 +137,14 @@ export const apolloToolJsonSchema = {
         type: 'string',
         description: "The person's current organization/company name",
       },
+      domain: {
+        type: 'string',
+        description: "The company's website domain (e.g. acme.com) — improves match accuracy",
+      },
+      linkedin_url: {
+        type: 'string',
+        description: "The person's LinkedIn profile URL",
+      },
     },
     required: [],
   },

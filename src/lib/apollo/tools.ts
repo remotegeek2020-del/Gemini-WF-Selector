@@ -5,6 +5,8 @@ interface ApolloEnrichParams {
   firstName?: string
   lastName?: string
   organizationName?: string
+  domain?: string
+  linkedinUrl?: string
 }
 
 interface ApolloEnrichResponse {
@@ -23,6 +25,8 @@ export async function apolloEnrichPerson(
     if (params.firstName) body.first_name = params.firstName
     if (params.lastName) body.last_name = params.lastName
     if (params.organizationName) body.organization_name = params.organizationName
+    if (params.domain) body.domain = params.domain
+    if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl
 
     const response = await fetch('https://api.apollo.io/api/v1/people/match', {
       method: 'POST',

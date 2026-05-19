@@ -71,6 +71,8 @@ export async function runAnthropicAgent(
           first_name?: string
           last_name?: string
           organization_name?: string
+          domain?: string
+          linkedin_url?: string
         }
 
         const apolloResult = await apolloEnrichPerson(apolloApiKey, {
@@ -78,6 +80,8 @@ export async function runAnthropicAgent(
           firstName: args.first_name || lead.firstName || undefined,
           lastName: args.last_name || lead.lastName || undefined,
           organizationName: args.organization_name || undefined,
+          domain: args.domain || undefined,
+          linkedinUrl: args.linkedin_url || undefined,
         })
 
         const formattedData = formatApolloDataForGemini(apolloResult.person)

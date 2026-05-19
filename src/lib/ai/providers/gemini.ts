@@ -36,6 +36,14 @@ const apolloEnrichPersonDeclaration: FunctionDeclaration = {
         type: SchemaType.STRING,
         description: "The person's current organization/company name",
       },
+      domain: {
+        type: SchemaType.STRING,
+        description: "The company's website domain (e.g. acme.com) — improves match accuracy",
+      },
+      linkedin_url: {
+        type: SchemaType.STRING,
+        description: "The person's LinkedIn profile URL",
+      },
     },
     required: [],
   },
@@ -104,6 +112,8 @@ export async function runGeminiAgent(
           first_name?: string
           last_name?: string
           organization_name?: string
+          domain?: string
+          linkedin_url?: string
         }
 
         const apolloResult = await apolloEnrichPerson(apolloApiKey, {
@@ -111,6 +121,8 @@ export async function runGeminiAgent(
           firstName: args.first_name || lead.firstName || undefined,
           lastName: args.last_name || lead.lastName || undefined,
           organizationName: args.organization_name || undefined,
+          domain: args.domain || undefined,
+          linkedinUrl: args.linkedin_url || undefined,
         })
 
         const formattedData = formatApolloDataForGemini(apolloResult.person)
