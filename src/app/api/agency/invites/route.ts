@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 
   const emailConfig = settingsRow.value as EmailConfig
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${request.nextUrl.protocol}//${request.nextUrl.host}`
   const setupLink = `${appUrl}/setup?token=${token}`
 
   const html = `
