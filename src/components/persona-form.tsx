@@ -31,6 +31,8 @@ interface FormData {
   description: string
   characteristics: string
   sample_person: string
+  state: string
+  county: string
   highlevel_workflow_id: string
   highlevel_workflow_name: string
   color: string
@@ -52,6 +54,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
     description: '',
     characteristics: '',
     sample_person: '',
+    state: '',
+    county: '',
     highlevel_workflow_id: '',
     highlevel_workflow_name: '',
     color: '#6366f1',
@@ -74,6 +78,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         description: persona.description || '',
         characteristics: persona.characteristics || '',
         sample_person: persona.sample_person || '',
+        state: persona.state || '',
+        county: persona.county || '',
         highlevel_workflow_id: persona.highlevel_workflow_id || '',
         highlevel_workflow_name: persona.highlevel_workflow_name || '',
         color: persona.color || '#6366f1',
@@ -85,6 +91,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         description: '',
         characteristics: '',
         sample_person: '',
+        state: '',
+        county: '',
         highlevel_workflow_id: '',
         highlevel_workflow_name: '',
         color: '#6366f1',
@@ -139,6 +147,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         description: form.description.trim(),
         characteristics: form.characteristics.trim(),
         sample_person: form.sample_person.trim() || null,
+        state: form.state.trim() || null,
+        county: form.county.trim() || null,
         highlevel_workflow_id: form.highlevel_workflow_id.trim() || null,
         highlevel_workflow_name: form.highlevel_workflow_name.trim() || null,
         color: form.color,
@@ -168,8 +178,11 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       setForm((prev) => ({
         ...prev,
         name: data.name || prev.name,
+        sample_person: data.sample_person || prev.sample_person,
         description: data.description || prev.description,
         characteristics: data.characteristics || prev.characteristics,
+        state: data.state || prev.state,
+        county: data.county || prev.county,
       }))
       setAiPanelOpen(false)
     } catch (err) {
@@ -282,6 +295,21 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
           onChange={handleChange('sample_person')}
           placeholder="e.g. VP of Marketing at a 500-person SaaS company"
         />
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="State (optional)"
+            value={form.state}
+            onChange={handleChange('state')}
+            placeholder="e.g. TX, CA, FL"
+          />
+          <Input
+            label="County (optional)"
+            value={form.county}
+            onChange={handleChange('county')}
+            placeholder="e.g. Harris County"
+          />
+        </div>
 
         <div className="border-t border-gray-200 pt-4">
           <h4 className="text-sm font-medium text-gray-700 mb-3">Highlevel Workflow</h4>

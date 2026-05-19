@@ -29,6 +29,8 @@ export interface Persona {
   description: string
   characteristics: string
   sample_person: string | null
+  state: string | null
+  county: string | null
   highlevel_workflow_id: string | null
   highlevel_workflow_name: string | null
   color: string

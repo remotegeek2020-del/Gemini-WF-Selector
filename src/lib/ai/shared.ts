@@ -17,7 +17,9 @@ export function buildSystemPrompt(personas: Persona[]): string {
    Name: ${p.name}
    Description: ${p.description}
    Characteristics: ${p.characteristics}
-   ${p.sample_person ? `Sample Person: ${p.sample_person}` : ''}`
+   ${p.sample_person ? `Sample Person: ${p.sample_person}` : ''}
+   ${p.state ? `State: ${p.state}` : ''}
+   ${p.county ? `County: ${p.county}` : ''}`.replace(/\n   \n/g, '\n')
     )
     .join('\n\n')
 
@@ -32,7 +34,8 @@ ${personaList}
 Instructions:
 - Always call apollo_enrich_person first to get professional details
 - Use email if available, otherwise use name and company from raw data
-- After enrichment, carefully analyze: job title, seniority level, company size, industry, and career history
+- After enrichment, carefully analyze: job title, seniority level, company size, industry, career history, and geographic location (state/county from Apollo data)
+- If a persona has a State or County specified, prefer it for leads located in that region — but only assign if the professional profile also matches
 - The enrichment response may include lusha_contact data with direct emails and phone numbers — use this for a fuller picture
 - Choose the single best matching persona based on the enriched data
 - If no persona is a good match, return persona_id as null with a clear explanation of why none fit
