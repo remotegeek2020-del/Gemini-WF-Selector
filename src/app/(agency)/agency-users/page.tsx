@@ -44,6 +44,9 @@ export default function AgencyUsersPage() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -108,6 +111,26 @@ export default function AgencyUsersPage() {
     setInviteSuccess(null)
   }
 
+  const handleResend = async (inviteId: string, email: string) => {
+    setResendingId(inviteId)
+    setResendSuccess(null)
+    try {
+      const res = await fetch('/api/agency/invites/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: inviteId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to resend invite')
+      setResendSuccess(`Invite resent to ${email}.`)
+      await fetchData()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to resend invite')
+    } finally {
+      setResendingId(null)
+    }
+  }
+
   const handleDeleteUser = async (userId: string) => {
     setDeletingUserId(userId)
     setDeleteError(null)
@@ -164,6 +187,11 @@ export default function AgencyUsersPage() {
         {deleteError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
             {deleteError}
+          </div>
+        )}
+        {resendSuccess && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            {resendSuccess}
           </div>
         )}
 
@@ -229,6 +257,7 @@ export default function AgencyUsersPage() {
                         <th className="text-left pb-3 font-medium text-gray-600">Email</th>
                         <th className="text-left pb-3 font-medium text-gray-600">Invited</th>
                         <th className="text-left pb-3 font-medium text-gray-600">Expires</th>
+                        <th className="pb-3" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -237,6 +266,16 @@ export default function AgencyUsersPage() {
                           <td className="py-3 text-gray-900">{invite.email}</td>
                           <td className="py-3 text-gray-500">{formatDate(invite.created_at)}</td>
                           <td className="py-3 text-gray-500">{formatDate(invite.expires_at)}</td>
+                          <td className="py-3 text-right">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              isLoading={resendingId === invite.id}
+                              onClick={() => handleResend(invite.id, invite.email)}
+                            >
+                              Resend
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
