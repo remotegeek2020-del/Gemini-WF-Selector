@@ -184,6 +184,7 @@ export default function SubAccountPersonasPage() {
         onClose={handleCloseForm}
         onSave={handleSave}
         persona={editingPersona}
+        accountId={accountId || ''}
       />
     </div>
   )
