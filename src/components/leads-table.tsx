@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 interface LeadsTableProps {
   leads: Lead[]
   onEnrich?: (leadId: string) => Promise<void>
+  onDelete?: (leadId: string) => Promise<void>
 }
 
 function formatDate(dateStr: string): string {
@@ -46,8 +47,9 @@ function getSourceColor(source: string | null): string {
   }
 }
 
-export default function LeadsTable({ leads, onEnrich }: LeadsTableProps) {
+export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProps) {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const handleEnrich = async (leadId: string) => {
@@ -57,6 +59,21 @@ export default function LeadsTable({ leads, onEnrich }: LeadsTableProps) {
       await onEnrich(leadId)
     } finally {
       setEnrichingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(leadId)
+        return next
+      })
+    }
+  }
+
+  const handleDelete = async (leadId: string, name: string) => {
+    if (!onDelete) return
+    if (!confirm(`Delete lead "${name}"? This cannot be undone.`)) return
+    setDeletingIds((prev) => new Set(prev).add(leadId))
+    try {
+      await onDelete(leadId)
+    } finally {
+      setDeletingIds((prev) => {
         const next = new Set(prev)
         next.delete(leadId)
         return next
@@ -160,19 +177,36 @@ export default function LeadsTable({ leads, onEnrich }: LeadsTableProps) {
                   {formatDate(lead.created_at)}
                 </td>
                 <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                  {(lead.status === 'pending' || lead.status === 'failed') && onEnrich && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      isLoading={enrichingIds.has(lead.id)}
-                      onClick={() => handleEnrich(lead.id)}
-                    >
-                      Enrich
-                    </Button>
-                  )}
-                  {lead.workflow_triggered && (
-                    <span className="text-xs text-green-600 font-medium">Workflow sent</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {(lead.status === 'pending' || lead.status === 'failed') && onEnrich && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        isLoading={enrichingIds.has(lead.id)}
+                        onClick={() => handleEnrich(lead.id)}
+                      >
+                        Enrich
+                      </Button>
+                    )}
+                    {lead.workflow_triggered && (
+                      <span className="text-xs text-green-600 font-medium">Workflow sent</span>
+                    )}
+                    {onDelete && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        isLoading={deletingIds.has(lead.id)}
+                        onClick={() =>
+                          handleDelete(
+                            lead.id,
+                            [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown'
+                          )
+                        }
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
               {expandedId === lead.id && (

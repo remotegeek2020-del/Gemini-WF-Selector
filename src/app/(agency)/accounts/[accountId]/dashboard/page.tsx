@@ -49,6 +49,18 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
     await fetchLeads()
   }
 
+  const handleDelete = async (leadId: string) => {
+    const res = await fetch(`/api/accounts/${accountId}/leads/${leadId}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(`Delete failed: ${data.error}`)
+      return
+    }
+    await fetchLeads()
+  }
+
   const statusOptions = [
     { value: '', label: 'All Statuses' },
     { value: 'pending', label: 'Pending' },
@@ -107,7 +119,7 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
               </svg>
             </div>
           ) : (
-            <LeadsTable leads={leads} onEnrich={handleEnrich} />
+            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} />
           )}
         </CardContent>
       </Card>
