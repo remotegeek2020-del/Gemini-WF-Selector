@@ -178,7 +178,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
                 </td>
                 <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
-                    {onEnrich && lead.status !== 'enriching' && (
+                    {onEnrich && (
                       <Button
                         size="sm"
                         variant="secondary"

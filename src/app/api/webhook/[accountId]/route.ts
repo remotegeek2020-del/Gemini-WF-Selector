@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
 import { assignWorkflow } from '@/lib/highlevel/client'
@@ -97,10 +99,9 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 })
   }
 
-  // Trigger enrichment asynchronously without requiring auth
-  enrichLead(accountId, lead.id).catch((err) => {
+  waitUntil(enrichLead(accountId, lead.id).catch((err) => {
     console.error('Failed to trigger enrichment:', err)
-  })
+  }))
 
   return NextResponse.json({ success: true, leadId: lead.id }, { status: 200 })
 }

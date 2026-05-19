@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
@@ -40,7 +41,11 @@ export async function POST(
   }
 
   if (lead.status === 'enriching') {
-    return NextResponse.json({ error: 'Lead is already being enriched' }, { status: 409 })
+    const updatedAt = new Date(lead.updated_at).getTime()
+    const stuckThreshold = 5 * 60 * 1000
+    if (Date.now() - updatedAt < stuckThreshold) {
+      return NextResponse.json({ error: 'Lead is already being enriched' }, { status: 409 })
+    }
   }
 
   // Mark as enriching
