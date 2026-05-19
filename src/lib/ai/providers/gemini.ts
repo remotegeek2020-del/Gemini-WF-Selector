@@ -5,7 +5,7 @@ import {
   type Tool,
 } from '@google/generative-ai'
 import { apolloEnrichPerson, formatApolloDataForGemini } from '@/lib/apollo/tools'
-import { lushaEnrichPerson, formatLushaData } from '@/lib/lusha/tools'
+import { autoLushaFromLinkedin } from '@/lib/lusha/tools'
 import type { AIConfig, EnrichmentResult, Persona } from '@/types'
 import {
   buildSystemPrompt,
@@ -50,37 +50,7 @@ const apolloEnrichPersonDeclaration: FunctionDeclaration = {
   },
 }
 
-const lushaEnrichPersonDeclaration: FunctionDeclaration = {
-  name: 'lusha_enrich_person',
-  description:
-    'Enriches a lead with direct contact data from Lusha. Especially useful for getting direct email addresses and phone numbers. Works best with a LinkedIn URL but can also use name and company.',
-  parameters: {
-    type: SchemaType.OBJECT,
-    properties: {
-      linkedin_url: {
-        type: SchemaType.STRING,
-        description: "The person's LinkedIn profile URL (best match signal)",
-      },
-      email: {
-        type: SchemaType.STRING,
-        description: "The person's email address",
-      },
-      first_name: {
-        type: SchemaType.STRING,
-        description: "The person's first name",
-      },
-      last_name: {
-        type: SchemaType.STRING,
-        description: "The person's last name",
-      },
-      company: {
-        type: SchemaType.STRING,
-        description: "The person's current company name",
-      },
-    },
-    required: [],
-  },
-}
+const apolloTools: Tool[] = [{ functionDeclarations: [apolloEnrichPersonDeclaration] }]
 
 function isRetryableError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
@@ -110,16 +80,10 @@ export async function runGeminiAgent(
   lushaApiKey?: string
 ): Promise<EnrichmentResult> {
   const genAI = new GoogleGenerativeAI(config.apiKey)
-
-  const functionDeclarations: FunctionDeclaration[] = [apolloEnrichPersonDeclaration]
-  if (lushaApiKey) functionDeclarations.push(lushaEnrichPersonDeclaration)
-
-  const tools: Tool[] = [{ functionDeclarations }]
-
   const model = genAI.getGenerativeModel({
     model: config.model || 'gemini-1.5-flash',
-    systemInstruction: buildSystemPrompt(personas, { hasLusha: !!lushaApiKey }),
-    tools,
+    systemInstruction: buildSystemPrompt(personas),
+    tools: apolloTools,
   })
 
   const chat = model.startChat()
@@ -128,9 +92,8 @@ export async function runGeminiAgent(
   const initialResponse = await withRetry(() => chat.sendMessage(buildLeadSummary(lead)))
   let result = initialResponse.response
 
-  // Agentic loop
   let iteration = 0
-  const maxIterations = 6
+  const maxIterations = 5
 
   while (iteration < maxIterations) {
     const functionCalls = result.functionCalls()
@@ -162,40 +125,26 @@ export async function runGeminiAgent(
         const formattedData = formatApolloDataForGemini(apolloResult.person)
         enrichedData = { ...enrichedData, ...formattedData, apollo_raw: apolloResult.person }
 
+        // Auto-enrich with Lusha if LinkedIn URL found
+        let lushaContact: Record<string, unknown> = {}
+        if (lushaApiKey && formattedData.linkedin_url) {
+          const { lushaFormatted, lushaRaw } = await autoLushaFromLinkedin(lushaApiKey, formattedData, lead)
+          enrichedData = { ...enrichedData, ...lushaFormatted, lusha_raw: lushaRaw }
+          lushaContact = lushaFormatted
+        } else if (lushaApiKey) {
+          enrichedData = { ...enrichedData, lusha_raw: null }
+        }
+
         functionResponses.push({
           functionResponse: {
             name: call.name,
             response: apolloResult.error
               ? { error: apolloResult.error, data: null }
-              : { data: formattedData, success: true },
-          },
-        })
-      } else if (call.name === 'lusha_enrich_person' && lushaApiKey) {
-        const args = call.args as {
-          linkedin_url?: string
-          email?: string
-          first_name?: string
-          last_name?: string
-          company?: string
-        }
-
-        const lushaResult = await lushaEnrichPerson(lushaApiKey, {
-          linkedinUrl: args.linkedin_url || (enrichedData.linkedin_url as string) || undefined,
-          email: args.email || lead.email || undefined,
-          firstName: args.first_name || lead.firstName || undefined,
-          lastName: args.last_name || lead.lastName || undefined,
-          company: args.company || (enrichedData.current_company as string) || undefined,
-        })
-
-        const lushaFormatted = formatLushaData(lushaResult.person)
-        enrichedData = { ...enrichedData, ...lushaFormatted, lusha_raw: lushaResult.person }
-
-        functionResponses.push({
-          functionResponse: {
-            name: call.name,
-            response: lushaResult.error
-              ? { error: lushaResult.error, data: null }
-              : { data: lushaFormatted, success: true },
+              : {
+                  data: formattedData,
+                  ...(Object.keys(lushaContact).length > 0 ? { lusha_contact: lushaContact } : {}),
+                  success: true,
+                },
           },
         })
       }

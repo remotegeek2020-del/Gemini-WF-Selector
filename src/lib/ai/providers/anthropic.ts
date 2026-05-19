@@ -1,13 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { apolloEnrichPerson, formatApolloDataForGemini } from '@/lib/apollo/tools'
-import { lushaEnrichPerson, formatLushaData } from '@/lib/lusha/tools'
+import { autoLushaFromLinkedin } from '@/lib/lusha/tools'
 import type { AIConfig, EnrichmentResult, Persona } from '@/types'
 import {
   buildSystemPrompt,
   buildLeadSummary,
   extractPersonaFromText,
   apolloToolJsonSchema,
-  lushaToolJsonSchema,
   type LeadData,
 } from '../shared'
 
@@ -33,32 +32,20 @@ export async function runAnthropicAgent(
     },
   ]
 
-  if (lushaApiKey) {
-    tools.push({
-      name: lushaToolJsonSchema.name,
-      description: lushaToolJsonSchema.description,
-      input_schema: {
-        type: 'object' as const,
-        properties: lushaToolJsonSchema.parameters.properties,
-        required: [],
-      },
-    })
-  }
-
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: buildLeadSummary(lead) },
   ]
 
   let enrichedData: Record<string, unknown> = {}
   let iteration = 0
-  const maxIterations = 6
+  const maxIterations = 5
   let finalText = ''
 
   while (iteration < maxIterations) {
     const response = await client.messages.create({
       model,
       max_tokens: 4096,
-      system: buildSystemPrompt(personas, { hasLusha: !!lushaApiKey }),
+      system: buildSystemPrompt(personas),
       tools,
       messages,
     })
@@ -67,9 +54,7 @@ export async function runAnthropicAgent(
 
     if (response.stop_reason !== 'tool_use') {
       for (const block of response.content) {
-        if (block.type === 'text') {
-          finalText += block.text
-        }
+        if (block.type === 'text') finalText += block.text
       }
       break
     }
@@ -99,45 +84,31 @@ export async function runAnthropicAgent(
         const formattedData = formatApolloDataForGemini(apolloResult.person)
         enrichedData = { ...enrichedData, ...formattedData, apollo_raw: apolloResult.person }
 
+        // Auto-enrich with Lusha if LinkedIn URL found
+        let lushaContact: Record<string, unknown> = {}
+        if (lushaApiKey && formattedData.linkedin_url) {
+          const { lushaFormatted, lushaRaw } = await autoLushaFromLinkedin(lushaApiKey, formattedData, lead)
+          enrichedData = { ...enrichedData, ...lushaFormatted, lusha_raw: lushaRaw }
+          lushaContact = lushaFormatted
+        } else if (lushaApiKey) {
+          enrichedData = { ...enrichedData, lusha_raw: null }
+        }
+
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,
           content: apolloResult.error
             ? JSON.stringify({ error: apolloResult.error, data: null })
-            : JSON.stringify({ data: formattedData, success: true }),
-        })
-      } else if (block.type === 'tool_use' && block.name === 'lusha_enrich_person' && lushaApiKey) {
-        const args = block.input as {
-          linkedin_url?: string
-          email?: string
-          first_name?: string
-          last_name?: string
-          company?: string
-        }
-
-        const lushaResult = await lushaEnrichPerson(lushaApiKey, {
-          linkedinUrl: args.linkedin_url || (enrichedData.linkedin_url as string) || undefined,
-          email: args.email || lead.email || undefined,
-          firstName: args.first_name || lead.firstName || undefined,
-          lastName: args.last_name || lead.lastName || undefined,
-          company: args.company || (enrichedData.current_company as string) || undefined,
-        })
-
-        const lushaFormatted = formatLushaData(lushaResult.person)
-        enrichedData = { ...enrichedData, ...lushaFormatted, lusha_raw: lushaResult.person }
-
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: lushaResult.error
-            ? JSON.stringify({ error: lushaResult.error, data: null })
-            : JSON.stringify({ data: lushaFormatted, success: true }),
+            : JSON.stringify({
+                data: formattedData,
+                ...(Object.keys(lushaContact).length > 0 ? { lusha_contact: lushaContact } : {}),
+                success: true,
+              }),
         })
       }
     }
 
     messages.push({ role: 'user', content: toolResults })
-
     iteration++
   }
 

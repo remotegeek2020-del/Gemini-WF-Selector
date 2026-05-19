@@ -9,7 +9,7 @@ export interface LeadData {
   rawData?: Record<string, unknown>
 }
 
-export function buildSystemPrompt(personas: Persona[], options?: { hasLusha?: boolean }): string {
+export function buildSystemPrompt(personas: Persona[]): string {
   const personaList = personas
     .map(
       (p, i) =>
@@ -21,14 +21,10 @@ export function buildSystemPrompt(personas: Persona[], options?: { hasLusha?: bo
     )
     .join('\n\n')
 
-  const lushaInstruction = options?.hasLusha
-    ? `- After Apollo enrichment, if a LinkedIn URL is found OR if Apollo returned limited contact data, call lusha_enrich_person to get direct email addresses and phone numbers — Lusha often finds contact info that Apollo misses, especially for leads who use alternate emails`
-    : ''
-
   return `You are a lead qualification AI agent for a sales team. Your job is to:
 1. Enrich lead data using the Apollo.io tool
-2. ${options?.hasLusha ? 'Use Lusha to get direct contact info if Apollo returns a LinkedIn URL or limited data' : 'Analyze the enriched professional profile'}
-3. Analyze the enriched profile and assign the lead to the most appropriate persona
+2. Analyze the enriched professional profile
+3. Assign the lead to the most appropriate persona
 
 Available personas:
 ${personaList}
@@ -36,8 +32,8 @@ ${personaList}
 Instructions:
 - Always call apollo_enrich_person first to get professional details
 - Use email if available, otherwise use name and company from raw data
-${lushaInstruction}
 - After enrichment, carefully analyze: job title, seniority level, company size, industry, and career history
+- The enrichment response may include lusha_contact data with direct emails and phone numbers — use this for a fuller picture
 - Choose the single best matching persona based on the enriched data
 - If no persona is a good match, return persona_id as null with a clear explanation of why none fit
 
@@ -66,7 +62,6 @@ Please enrich this lead using Apollo and then assign them to a persona.`
 export function extractPersonaFromText(finalText: string, personas: Persona[]): string | null {
   let assignedPersonaId: string | null = null
 
-  // Look for persona ID in the response (UUIDs)
   const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
   const uuids = finalText.match(uuidRegex)
 
@@ -80,7 +75,6 @@ export function extractPersonaFromText(finalText: string, personas: Persona[]): 
     }
   }
 
-  // Check if the model explicitly said no match
   const noMatchPhrases = [
     'no match',
     'no persona',
@@ -105,7 +99,6 @@ export function extractPersonaFromText(finalText: string, personas: Persona[]): 
     return null
   }
 
-  // If no UUID found but model gave text, try to match persona by name
   if (!assignedPersonaId) {
     for (const persona of personas) {
       if (finalText.toLowerCase().includes(persona.name.toLowerCase())) {
@@ -149,39 +142,6 @@ export const apolloToolJsonSchema = {
       linkedin_url: {
         type: 'string',
         description: "The person's LinkedIn profile URL",
-      },
-    },
-    required: [],
-  },
-}
-
-// Lusha tool definition in JSON Schema format
-export const lushaToolJsonSchema = {
-  name: 'lusha_enrich_person',
-  description:
-    'Enriches a lead with direct contact data from Lusha. Especially useful for getting direct email addresses and phone numbers. Works best with a LinkedIn URL but can also use name and company.',
-  parameters: {
-    type: 'object' as const,
-    properties: {
-      linkedin_url: {
-        type: 'string',
-        description: "The person's LinkedIn profile URL (best match signal)",
-      },
-      email: {
-        type: 'string',
-        description: "The person's email address",
-      },
-      first_name: {
-        type: 'string',
-        description: "The person's first name",
-      },
-      last_name: {
-        type: 'string',
-        description: "The person's last name",
-      },
-      company: {
-        type: 'string',
-        description: "The person's current company name",
       },
     },
     required: [],

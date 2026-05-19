@@ -79,3 +79,29 @@ export function formatLushaData(person: LushaPersonData | null): Record<string, 
     lusha_current_company: person.currentPositions?.[0]?.companyName,
   }
 }
+
+/**
+ * Auto-calls Lusha using the LinkedIn URL from Apollo enrichment data.
+ * Returns formatted Lusha data merged into enrichedData, plus a summary
+ * to include in the Apollo tool response so the AI sees it.
+ */
+export async function autoLushaFromLinkedin(
+  lushaApiKey: string,
+  apolloFormatted: Record<string, unknown>,
+  lead: { firstName?: string | null; lastName?: string | null; email?: string | null }
+): Promise<{ lushaFormatted: Record<string, unknown>; lushaRaw: LushaPersonData | null }> {
+  const linkedinUrl = apolloFormatted.linkedin_url as string | undefined
+  if (!linkedinUrl) {
+    return { lushaFormatted: {}, lushaRaw: null }
+  }
+
+  const lushaResult = await lushaEnrichPerson(lushaApiKey, {
+    linkedinUrl,
+    firstName: lead.firstName || undefined,
+    lastName: lead.lastName || undefined,
+    email: lead.email || undefined,
+  })
+
+  const lushaFormatted = formatLushaData(lushaResult.person)
+  return { lushaFormatted, lushaRaw: lushaResult.person }
+}
