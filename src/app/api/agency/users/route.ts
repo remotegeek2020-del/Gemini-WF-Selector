@@ -21,7 +21,9 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data: userRoles, error } = await supabase
+  const admin = createAdminClient()
+
+  const { data: userRoles, error } = await admin
     .from('user_roles')
     .select('user_id')
     .eq('role', 'agency_admin')
@@ -31,8 +33,6 @@ export async function GET() {
   if (!userRoles || userRoles.length === 0) {
     return NextResponse.json({ users: [] })
   }
-
-  const admin = createAdminClient()
   const users = await Promise.all(
     userRoles.map(async ({ user_id }) => {
       const { data } = await admin.auth.admin.getUserById(user_id)
