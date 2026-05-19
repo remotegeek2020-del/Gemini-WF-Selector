@@ -20,23 +20,24 @@ export async function POST(
   const { searchParams } = new URL(request.url)
   const secret = searchParams.get('secret')
 
-  // The secret is the first 16 chars of accountId with hyphens removed
-  // Validate if provided (optional extra security)
   const expectedSecret = accountId.replace(/-/g, '').substring(0, 16)
   if (secret && secret !== expectedSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Verify account exists
   const supabase = createAdminClient()
   const { data: account, error: accountError } = await supabase
     .from('accounts')
-    .select('id')
+    .select('id, nurture_enabled')
     .eq('id', accountId)
     .single()
 
   if (accountError || !account) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+  }
+
+  if (!account.nurture_enabled) {
+    return NextResponse.json({ error: 'Nurture pipeline not enabled for this account' }, { status: 403 })
   }
 
   let body: Record<string, unknown>
@@ -46,14 +47,12 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  // Extract contact data from Highlevel webhook payload
   const contactId = (body.contactId || body.id || body.contact_id) as string | undefined
   const firstName = (body.firstName || body.first_name) as string | undefined
   const lastName = (body.lastName || body.last_name) as string | undefined
   const email = body.email as string | undefined
   const phone = (body.phone || body.phoneRaw) as string | undefined
 
-  // Determine source from tags or custom fields
   let source = 'other'
   const rawTags = body.tags
   const tags = Array.isArray(rawTags) ? rawTags : typeof rawTags === 'string' ? [rawTags] : []
@@ -77,7 +76,6 @@ export async function POST(
     }
   }
 
-  // Create lead record scoped to this account
   const { data: lead, error: insertError } = await supabase
     .from('leads')
     .insert({
@@ -90,23 +88,24 @@ export async function POST(
       source,
       raw_data: body,
       status: 'pending',
+      pipeline: 'nurture',
     })
     .select()
     .single()
 
   if (insertError) {
-    console.error('Failed to insert lead:', insertError)
+    console.error('Failed to insert nurture lead:', insertError)
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 })
   }
 
-  waitUntil(enrichLead(accountId, lead.id).catch((err) => {
-    console.error('Failed to trigger enrichment:', err)
+  waitUntil(enrichNurtureLead(accountId, lead.id).catch((err) => {
+    console.error('Failed to trigger nurture enrichment:', err)
   }))
 
   return NextResponse.json({ success: true, leadId: lead.id }, { status: 200 })
 }
 
-async function enrichLead(accountId: string, leadId: string) {
+async function enrichNurtureLead(accountId: string, leadId: string) {
   const supabase = createAdminClient()
 
   const { data: lead } = await supabase.from('leads').select('*').eq('id', leadId).single()
@@ -142,7 +141,12 @@ async function enrichLead(accountId: string, leadId: string) {
     return
   }
 
-  const { data: personas } = await supabase.from('personas').select('*').eq('account_id', accountId).eq('pipeline', 'main').order('created_at', { ascending: true })
+  const { data: personas } = await supabase
+    .from('personas')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('pipeline', 'nurture')
+    .order('created_at', { ascending: true })
 
   const result = await runEnrichmentAgent(aiConfig, apolloKey, {
     firstName: lead.first_name, lastName: lead.last_name, email: lead.email,

@@ -23,6 +23,7 @@ interface PersonaFormProps {
   onSave: (data: Partial<Persona>) => Promise<void>
   persona?: Persona | null
   accountId: string
+  pipeline?: 'main' | 'nurture'
 }
 
 interface FormData {
@@ -42,7 +43,7 @@ interface HLWorkflow {
   status: string
 }
 
-export default function PersonaForm({ isOpen, onClose, onSave, persona, accountId }: PersonaFormProps) {
+export default function PersonaForm({ isOpen, onClose, onSave, persona, accountId, pipeline = 'main' }: PersonaFormProps) {
   const [workflows, setWorkflows] = useState<HLWorkflow[]>([])
   const [workflowsLoading, setWorkflowsLoading] = useState(false)
   const [workflowsError, setWorkflowsError] = useState<string | null>(null)
@@ -124,6 +125,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         highlevel_workflow_name: form.highlevel_workflow_name.trim() || null,
         color: form.color,
         is_default: form.is_default,
+        pipeline: persona?.pipeline ?? pipeline,
       })
       onClose()
     } catch (err) {

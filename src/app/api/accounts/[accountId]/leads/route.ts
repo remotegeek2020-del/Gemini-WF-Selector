@@ -26,6 +26,7 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
   const personaId = searchParams.get('persona_id')
+  const pipeline = searchParams.get('pipeline') || 'main'
   const limit = parseInt(searchParams.get('limit') || '50', 10)
   const offset = parseInt(searchParams.get('offset') || '0', 10)
 
@@ -33,6 +34,7 @@ export async function GET(
     .from('leads')
     .select('*, personas(id, name, color)', { count: 'exact' })
     .eq('account_id', params.accountId)
+    .eq('pipeline', pipeline)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 

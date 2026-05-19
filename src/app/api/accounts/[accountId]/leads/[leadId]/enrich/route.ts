@@ -101,11 +101,12 @@ export async function POST(
       )
     }
 
-    // Fetch personas for this account
+    // Fetch personas for this account, scoped to the lead's pipeline
     const { data: personas, error: personasError } = await supabase
       .from('personas')
       .select('*')
       .eq('account_id', accountId)
+      .eq('pipeline', lead.pipeline || 'main')
       .order('created_at', { ascending: true })
 
     if (personasError) throw new Error(`Failed to fetch personas: ${personasError.message}`)

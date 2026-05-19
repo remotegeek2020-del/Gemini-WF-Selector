@@ -7,8 +7,11 @@ import PersonaForm from '@/components/persona-form'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
+type Pipeline = 'main' | 'nurture'
+
 export default function SubAccountPersonasPage() {
   const [accountId, setAccountId] = useState<string | null>(null)
+  const [activePipeline, setActivePipeline] = useState<Pipeline>('main')
   const [personas, setPersonas] = useState<Persona[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -31,11 +34,11 @@ export default function SubAccountPersonasPage() {
     getAccountId()
   }, [])
 
-  const fetchPersonas = async (id: string) => {
+  const fetchPersonas = async (id: string, pipeline: Pipeline) => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/accounts/${id}/personas`)
+      const res = await fetch(`/api/accounts/${id}/personas?pipeline=${pipeline}`)
       if (!res.ok) throw new Error('Failed to fetch personas')
       const data = await res.json()
       setPersonas(data.personas || [])
@@ -47,8 +50,9 @@ export default function SubAccountPersonasPage() {
   }
 
   useEffect(() => {
-    if (accountId) fetchPersonas(accountId)
-  }, [accountId])
+    if (accountId) fetchPersonas(accountId, activePipeline)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, activePipeline])
 
   const handleSave = async (data: Partial<Persona>) => {
     if (!accountId) return
@@ -68,7 +72,7 @@ export default function SubAccountPersonasPage() {
       throw new Error(errData.error || 'Failed to save persona')
     }
 
-    if (accountId) await fetchPersonas(accountId)
+    if (accountId) await fetchPersonas(accountId, activePipeline)
     setEditingPersona(null)
   }
 
@@ -84,7 +88,7 @@ export default function SubAccountPersonasPage() {
         alert(`Failed to delete: ${data.error}`)
         return
       }
-      await fetchPersonas(accountId)
+      await fetchPersonas(accountId, activePipeline)
     } finally {
       setDeletingId(null)
     }
@@ -100,6 +104,8 @@ export default function SubAccountPersonasPage() {
     setEditingPersona(null)
   }
 
+  const pipelineLabel = activePipeline === 'main' ? 'New Lead' : 'Nurture'
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -111,8 +117,25 @@ export default function SubAccountPersonasPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New Persona
+          New {pipelineLabel} Persona
         </Button>
+      </div>
+
+      {/* Pipeline tabs */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit mb-6">
+        {(['main', 'nurture'] as Pipeline[]).map((p) => (
+          <button
+            key={p}
+            onClick={() => setActivePipeline(p)}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              activePipeline === p
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {p === 'main' ? 'New Leads' : 'Nurture'}
+          </button>
+        ))}
       </div>
 
       {error && (
@@ -133,9 +156,11 @@ export default function SubAccountPersonasPage() {
           <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <h3 className="mt-3 text-sm font-semibold text-gray-500">No personas yet</h3>
-          <p className="text-xs text-gray-400 mt-1 mb-4">Create personas to classify your leads automatically</p>
-          <Button onClick={() => setIsFormOpen(true)} size="sm">Create your first persona</Button>
+          <h3 className="mt-3 text-sm font-semibold text-gray-500">No {pipelineLabel.toLowerCase()} personas yet</h3>
+          <p className="text-xs text-gray-400 mt-1 mb-4">
+            Create personas to classify your {activePipeline === 'main' ? 'new' : 'nurture'} leads automatically
+          </p>
+          <Button onClick={() => setIsFormOpen(true)} size="sm">Create your first {pipelineLabel.toLowerCase()} persona</Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -144,6 +169,11 @@ export default function SubAccountPersonasPage() {
               <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
                 <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: persona.color }} />
                 <h3 className="font-semibold text-gray-900 flex-1 truncate">{persona.name}</h3>
+                {persona.is_default && (
+                  <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex-shrink-0">
+                    Default
+                  </span>
+                )}
               </div>
               <div className="px-5 py-4 flex-1 space-y-3">
                 <div>
@@ -185,6 +215,7 @@ export default function SubAccountPersonasPage() {
         onSave={handleSave}
         persona={editingPersona}
         accountId={accountId || ''}
+        pipeline={activePipeline}
       />
     </div>
   )

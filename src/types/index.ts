@@ -2,6 +2,7 @@ export interface Account {
   id: string
   name: string
   slug: string
+  nurture_enabled: boolean
   created_at: string
   updated_at: string
 }
@@ -32,6 +33,7 @@ export interface Persona {
   highlevel_workflow_name: string | null
   color: string
   is_default: boolean
+  pipeline: 'main' | 'nurture'
   created_at: string
   updated_at: string
 }
@@ -45,6 +47,7 @@ export interface Lead {
   email: string | null
   phone: string | null
   source: string | null
+  pipeline: 'main' | 'nurture'
   raw_data: Record<string, unknown>
   enriched_data: Record<string, unknown> | null
   assigned_persona_id: string | null

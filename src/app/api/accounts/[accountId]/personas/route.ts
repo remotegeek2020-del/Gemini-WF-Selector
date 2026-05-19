@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { accountId: string } }
 ) {
   const supabase = createServerClient()
@@ -23,11 +23,20 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data, error } = await supabase
+  const { searchParams } = new URL(request.url)
+  const pipeline = searchParams.get('pipeline')
+
+  let query = supabase
     .from('personas')
     .select('*')
     .eq('account_id', params.accountId)
     .order('created_at', { ascending: true })
+
+  if (pipeline === 'main' || pipeline === 'nurture') {
+    query = query.eq('pipeline', pipeline)
+  }
+
+  const { data, error } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -70,6 +79,7 @@ export async function POST(
     highlevel_workflow_name,
     color,
     is_default,
+    pipeline,
   } = body
 
   if (!name || !description || !characteristics) {
@@ -79,11 +89,14 @@ export async function POST(
     )
   }
 
+  const resolvedPipeline = pipeline === 'nurture' ? 'nurture' : 'main'
+
   if (is_default) {
     await supabase
       .from('personas')
       .update({ is_default: false })
       .eq('account_id', params.accountId)
+      .eq('pipeline', resolvedPipeline)
       .eq('is_default', true)
   }
 
@@ -99,6 +112,7 @@ export async function POST(
       highlevel_workflow_name: highlevel_workflow_name || null,
       color: color || '#6366f1',
       is_default: is_default === true,
+      pipeline: resolvedPipeline,
     })
     .select()
     .single()

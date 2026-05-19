@@ -15,7 +15,7 @@ export default async function SubAccountLayout({ children }: { children: React.R
   const supabase = createServerClient()
   const { data: account } = await supabase
     .from('accounts')
-    .select('id, name')
+    .select('id, name, nurture_enabled')
     .eq('id', roleData.account_id)
     .single()
 
@@ -25,6 +25,7 @@ export default async function SubAccountLayout({ children }: { children: React.R
         accountId={roleData.account_id}
         accountName={account?.name}
         isAgencyAdmin={false}
+        nurtureEnabled={account?.nurture_enabled}
       />
       <main className="flex-1 p-8 overflow-auto bg-gray-50">{children}</main>
     </div>

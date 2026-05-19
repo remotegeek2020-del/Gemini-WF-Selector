@@ -91,6 +91,7 @@ export default function SubAccountSettingsPage() {
   const [savingService, setSavingService] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [nurtureEnabled, setNurtureEnabled] = useState(false)
   const [formValues, setFormValues] = useState<
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
@@ -125,6 +126,7 @@ export default function SubAccountSettingsPage() {
         const data = await res.json()
         const keys: ApiKeyEntry[] = data.apiKeys || []
         setExistingKeys(keys)
+        setNurtureEnabled(data.nurtureEnabled ?? false)
 
         // Pre-populate AI model settings if they exist
         const aiModelEntry = keys.find((k) => k.service === 'ai_model')
@@ -364,6 +366,28 @@ export default function SubAccountSettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Nurture pipeline info (read-only for sub-accounts) */}
+          {nurtureEnabled && accountId && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Nurture Pipeline</CardTitle>
+                  <span className="text-xs font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Enabled</span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-2">
+                  Nurture webhook URL — use this in Highlevel for cold or limbo lead automations:
+                </p>
+                <code className="block bg-indigo-50 border border-indigo-100 px-3 py-2 rounded text-xs text-indigo-800 font-mono break-all">
+                  {typeof window !== 'undefined'
+                    ? `${window.location.origin}/api/webhook/${accountId}/nurture?secret=${accountId.replace(/-/g, '').substring(0, 16)}`
+                    : ''}
+                </code>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Apollo and Highlevel sections */}
           {SERVICE_CONFIGS.map((config) => {

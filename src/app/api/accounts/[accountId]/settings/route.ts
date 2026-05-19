@@ -23,14 +23,24 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data, error } = await supabase
-    .from('api_keys')
-    .select('id, service, key_value, extra_data, updated_at')
-    .eq('account_id', params.accountId)
+  const [keysResult, accountResult] = await Promise.all([
+    supabase
+      .from('api_keys')
+      .select('id, service, key_value, extra_data, updated_at')
+      .eq('account_id', params.accountId),
+    supabase
+      .from('accounts')
+      .select('nurture_enabled')
+      .eq('id', params.accountId)
+      .single(),
+  ])
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (keysResult.error) return NextResponse.json({ error: keysResult.error.message }, { status: 500 })
 
-  return NextResponse.json({ apiKeys: data || [] })
+  return NextResponse.json({
+    apiKeys: keysResult.data || [],
+    nurtureEnabled: accountResult.data?.nurture_enabled ?? false,
+  })
 }
 
 export async function POST(
@@ -92,4 +102,45 @@ export async function POST(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ apiKey: data }, { status: 200 })
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { accountId: string } }
+) {
+  const supabase = createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: roleData } = await supabase
+    .from('user_roles')
+    .select('role, account_id')
+    .eq('user_id', user.id)
+    .single()
+
+  if (!roleData) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (roleData.role === 'sub_account' && roleData.account_id !== params.accountId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  if (typeof body.nurture_enabled !== 'boolean') {
+    return NextResponse.json({ error: 'nurture_enabled (boolean) is required' }, { status: 400 })
+  }
+
+  const { error } = await supabase
+    .from('accounts')
+    .update({ nurture_enabled: body.nurture_enabled, updated_at: new Date().toISOString() })
+    .eq('id', params.accountId)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ success: true })
 }

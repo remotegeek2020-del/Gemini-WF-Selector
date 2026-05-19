@@ -41,11 +41,19 @@ export async function PUT(
     is_default,
   } = body
 
-  if (is_default) {
+  const { data: existingPersona } = await supabase
+    .from('personas')
+    .select('pipeline')
+    .eq('id', params.personaId)
+    .eq('account_id', params.accountId)
+    .single()
+
+  if (is_default && existingPersona) {
     await supabase
       .from('personas')
       .update({ is_default: false })
       .eq('account_id', params.accountId)
+      .eq('pipeline', existingPersona.pipeline)
       .eq('is_default', true)
       .neq('id', params.personaId)
   }

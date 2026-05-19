@@ -91,6 +91,8 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [webhookSecret, setWebhookSecret] = useState<string>('')
+  const [nurtureEnabled, setNurtureEnabled] = useState(false)
+  const [togglingNurture, setTogglingNurture] = useState(false)
   const [formValues, setFormValues] = useState<
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
@@ -111,6 +113,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         const data = await res.json()
         const keys: ApiKeyEntry[] = data.apiKeys || []
         setExistingKeys(keys)
+        setNurtureEnabled(data.nurtureEnabled ?? false)
 
         // Pre-populate AI model settings if they exist
         const aiModelEntry = keys.find((k) => k.service === 'ai_model')
@@ -242,8 +245,39 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
       ? `${window.location.origin}/api/webhook/${accountId}?secret=${webhookSecret}`
       : `https://your-app.com/api/webhook/${accountId}?secret=${webhookSecret}`
 
+  const nurtureWebhookUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/api/webhook/${accountId}/nurture?secret=${webhookSecret}`
+      : `https://your-app.com/api/webhook/${accountId}/nurture?secret=${webhookSecret}`
+
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl).catch(() => {})
+  }
+
+  const handleCopyNurtureWebhook = () => {
+    navigator.clipboard.writeText(nurtureWebhookUrl).catch(() => {})
+  }
+
+  const handleToggleNurture = async (enabled: boolean) => {
+    setTogglingNurture(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nurture_enabled: enabled }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update')
+      }
+      setNurtureEnabled(enabled)
+      setSuccess(`Nurture pipeline ${enabled ? 'enabled' : 'disabled'}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle nurture pipeline')
+    } finally {
+      setTogglingNurture(false)
+    }
   }
 
   const existingAiModel = getExistingKey('ai_model')
@@ -276,6 +310,48 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           <p className="text-xs text-gray-500 mt-2">
             The account ID acts as the secret. Keep this URL private.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Nurture Pipeline</CardTitle>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={nurtureEnabled}
+              disabled={togglingNurture}
+              onClick={() => handleToggleNurture(!nurtureEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                nurtureEnabled ? 'bg-indigo-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  nurtureEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 mb-3">
+            Enable a separate pipeline for cold and limbo leads. When enabled, a dedicated menu and webhook become active. Nurture leads have their own personas and workflow routing.
+          </p>
+          {nurtureEnabled && (
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Nurture webhook URL:</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-indigo-50 border border-indigo-100 px-3 py-2 rounded text-xs text-indigo-800 font-mono break-all">
+                  {nurtureWebhookUrl}
+                </code>
+                <Button variant="secondary" size="sm" onClick={handleCopyNurtureWebhook}>
+                  Copy
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

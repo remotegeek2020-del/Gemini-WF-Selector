@@ -14,7 +14,7 @@ export default async function AccountLayout({
   const supabase = createServerClient()
   const { data: account } = await supabase
     .from('accounts')
-    .select('id, name')
+    .select('id, name, nurture_enabled')
     .eq('id', params.accountId)
     .single()
 
@@ -28,6 +28,7 @@ export default async function AccountLayout({
         accountId={params.accountId}
         accountName={account.name}
         isAgencyAdmin={true}
+        nurtureEnabled={account.nurture_enabled}
       />
       <main className="flex-1 p-8 overflow-auto bg-gray-50">{children}</main>
     </div>
