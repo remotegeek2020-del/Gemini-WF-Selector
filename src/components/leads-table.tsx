@@ -233,7 +233,8 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
                         const raw = lead.enriched_data as Record<string, unknown>
                         const apolloEntries = Object.entries(raw).filter(([k]) => !k.startsWith('lusha_') && k !== 'apollo_raw' && k !== 'lusha_raw')
                         const lushaEntries = Object.entries(raw).filter(([k]) => k.startsWith('lusha_') && k !== 'lusha_raw')
-                        const hasLusha = lushaEntries.length > 0
+                        const lushaRan = 'lusha_raw' in raw
+                        const hasLusha = lushaRan
 
                         const renderValue = (v: unknown) => {
                           if (Array.isArray(v)) {
@@ -274,7 +275,19 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
                         return (
                           <div className={`col-span-2 grid gap-4 ${hasLusha ? 'grid-cols-2' : 'grid-cols-1'}`}>
                             {renderSection(apolloEntries, 'Apollo.io', 'text-blue-600', 'bg-blue-50 text-blue-600')}
-                            {hasLusha && renderSection(lushaEntries, 'Lusha', 'text-purple-600', 'bg-purple-50 text-purple-600')}
+                            {hasLusha && (
+                              lushaEntries.length > 0
+                                ? renderSection(lushaEntries, 'Lusha', 'text-purple-600', 'bg-purple-50 text-purple-600')
+                                : (
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <h4 className="text-xs font-semibold uppercase tracking-wide text-purple-600">Lusha</h4>
+                                      <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-purple-50 text-purple-600">source</span>
+                                    </div>
+                                    <p className="text-sm text-gray-400 italic">No contact found in Lusha database</p>
+                                  </div>
+                                )
+                            )}
                           </div>
                         )
                       })()}
