@@ -25,23 +25,19 @@ export async function POST(
   }
 
   const admin = createAdminClient()
-  const { data: settingsRow } = await admin
-    .from('agency_settings')
-    .select('value')
-    .eq('key', 'persona_gen_ai')
-    .single()
 
-  const config = settingsRow?.value as Record<string, unknown> | null
-  if (!config?.enabled) {
-    return NextResponse.json({ error: 'AI persona generation is not enabled' }, { status: 403 })
+  const [settingsResult, accountResult] = await Promise.all([
+    admin.from('agency_settings').select('value').eq('key', 'persona_gen_ai').single(),
+    admin.from('accounts').select('persona_gen_ai_enabled').eq('id', params.accountId).single(),
+  ])
+
+  const config = settingsResult.data?.value as Record<string, unknown> | null
+  if (!config?.api_key || !config?.provider || !config?.model) {
+    return NextResponse.json({ error: 'AI persona generation is not configured' }, { status: 403 })
   }
 
-  const provider = config.provider as string
-  const model = config.model as string
-  const apiKey = config.api_key as string
-
-  if (!provider || !model || !apiKey) {
-    return NextResponse.json({ error: 'AI persona generation is not fully configured' }, { status: 500 })
+  if (!accountResult.data?.persona_gen_ai_enabled) {
+    return NextResponse.json({ error: 'AI persona generation is not enabled for this account' }, { status: 403 })
   }
 
   let body: { prompt?: string }
@@ -57,7 +53,11 @@ export async function POST(
 
   try {
     const result = await generatePersonaContent(
-      { provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter', model, apiKey },
+      {
+        provider: config.provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter',
+        model: config.model as string,
+        apiKey: config.api_key as string,
+      },
       body.prompt.trim()
     )
     return NextResponse.json(result)

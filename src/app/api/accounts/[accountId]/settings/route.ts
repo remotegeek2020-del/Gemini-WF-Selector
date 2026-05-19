@@ -30,7 +30,7 @@ export async function GET(
       .eq('account_id', params.accountId),
     supabase
       .from('accounts')
-      .select('nurture_enabled')
+      .select('nurture_enabled, persona_gen_ai_enabled')
       .eq('id', params.accountId)
       .single(),
   ])
@@ -40,6 +40,7 @@ export async function GET(
   return NextResponse.json({
     apiKeys: keysResult.data || [],
     nurtureEnabled: accountResult.data?.nurture_enabled ?? false,
+    personaGenAiEnabled: accountResult.data?.persona_gen_ai_enabled ?? false,
   })
 }
 
@@ -131,13 +132,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  if (typeof body.nurture_enabled !== 'boolean') {
-    return NextResponse.json({ error: 'nurture_enabled (boolean) is required' }, { status: 400 })
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (typeof body.nurture_enabled === 'boolean') updates.nurture_enabled = body.nurture_enabled
+  if (typeof body.persona_gen_ai_enabled === 'boolean') updates.persona_gen_ai_enabled = body.persona_gen_ai_enabled
+
+  if (Object.keys(updates).length === 1) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   }
 
   const { error } = await supabase
     .from('accounts')
-    .update({ nurture_enabled: body.nurture_enabled, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', params.accountId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

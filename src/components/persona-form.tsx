@@ -112,8 +112,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       .catch(() => setWorkflowsError('Failed to load workflows'))
       .finally(() => setWorkflowsLoading(false))
 
-    // Check AI generation availability
-    fetch('/api/agency/persona-gen-ai')
+    // Check AI generation availability for this account
+    fetch(`/api/agency/persona-gen-ai?accountId=${accountId}`)
       .then((r) => r.json())
       .then((data) => setAiEnabled(data.enabled === true))
       .catch(() => setAiEnabled(false))

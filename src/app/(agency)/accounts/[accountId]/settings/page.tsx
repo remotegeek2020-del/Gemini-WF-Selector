@@ -93,6 +93,9 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [webhookSecret, setWebhookSecret] = useState<string>('')
   const [nurtureEnabled, setNurtureEnabled] = useState(false)
   const [togglingNurture, setTogglingNurture] = useState(false)
+  const [personaGenAiEnabled, setPersonaGenAiEnabled] = useState(false)
+  const [togglingPersonaGenAi, setTogglingPersonaGenAi] = useState(false)
+  const [personaGenAiConfigured, setPersonaGenAiConfigured] = useState(false)
   const [formValues, setFormValues] = useState<
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
@@ -114,6 +117,13 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         const keys: ApiKeyEntry[] = data.apiKeys || []
         setExistingKeys(keys)
         setNurtureEnabled(data.nurtureEnabled ?? false)
+        setPersonaGenAiEnabled(data.personaGenAiEnabled ?? false)
+
+        // Check if agency AI persona gen is globally configured
+        fetch('/api/agency/persona-gen-ai?accountId=' + accountId)
+          .then((r) => r.json())
+          .then((d) => setPersonaGenAiConfigured(d.configured === true))
+          .catch(() => {})
 
         // Pre-populate AI model settings if they exist
         const aiModelEntry = keys.find((k) => k.service === 'ai_model')
@@ -280,6 +290,28 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     }
   }
 
+  const handleTogglePersonaGenAi = async (enabled: boolean) => {
+    setTogglingPersonaGenAi(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_gen_ai_enabled: enabled }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update')
+      }
+      setPersonaGenAiEnabled(enabled)
+      setSuccess(`AI Persona Generator ${enabled ? 'enabled' : 'disabled'} for this account`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle AI Persona Generator')
+    } finally {
+      setTogglingPersonaGenAi(false)
+    }
+  }
+
   const existingAiModel = getExistingKey('ai_model')
 
   return (
@@ -310,6 +342,45 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           <p className="text-xs text-gray-500 mt-2">
             The account ID acts as the secret. Keep this URL private.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>AI Persona Generator</CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Allow this account to generate persona content with AI</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={personaGenAiEnabled}
+              disabled={togglingPersonaGenAi || !personaGenAiConfigured}
+              onClick={() => handleTogglePersonaGenAi(!personaGenAiEnabled)}
+              title={!personaGenAiConfigured ? 'Configure AI Persona Generator in Agency Settings first' : undefined}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-40 ${
+                personaGenAiEnabled ? 'bg-indigo-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  personaGenAiEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!personaGenAiConfigured ? (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              No AI model configured yet. Go to <strong>Agency Settings</strong> and set up the AI Persona Generator first.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-600">
+              When enabled, users in this account see a <strong>Generate with AI</strong> button inside the persona form. They describe their target audience and the AI writes the description and characteristics automatically.
+            </p>
+          )}
         </CardContent>
       </Card>
 
