@@ -212,7 +212,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
               {expandedId === lead.id && (
                 <tr key={`${lead.id}-expanded`} className="bg-gray-50">
                   <td colSpan={7} className="px-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 items-start">
                       {lead.persona_reasoning && (
                         <div>
                           <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
@@ -229,35 +229,55 @@ export default function LeadsTable({ leads, onEnrich, onDelete }: LeadsTableProp
                           <p className="text-sm text-red-700">{lead.error_message}</p>
                         </div>
                       )}
-                      {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (
-                        <div>
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                            Enriched Data
-                          </h4>
-                          <dl className="text-sm space-y-1">
-                            {Object.entries(lead.enriched_data)
-                              .filter(([k]) => k !== 'apollo_raw')
-                              .map(([k, v]) => (
+                      {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (() => {
+                        const raw = lead.enriched_data as Record<string, unknown>
+                        const apolloEntries = Object.entries(raw).filter(([k]) => !k.startsWith('lusha_') && k !== 'apollo_raw' && k !== 'lusha_raw')
+                        const lushaEntries = Object.entries(raw).filter(([k]) => k.startsWith('lusha_'))
+                        const hasLusha = lushaEntries.length > 0
+
+                        const renderValue = (v: unknown) => {
+                          if (Array.isArray(v)) {
+                            if (v.length === 0) return <span className="text-gray-400 italic">None found</span>
+                            return (
+                              <div className="space-y-0.5">
+                                {v.map((item, i) =>
+                                  typeof item === 'object' && item !== null
+                                    ? <span key={i} className="block text-xs">{Object.entries(item as Record<string, unknown>).filter(([, val]) => val).map(([ik, iv]) => `${ik}: ${iv}`).join(' · ')}</span>
+                                    : <span key={i} className="block">{String(item)}</span>
+                                )}
+                              </div>
+                            )
+                          }
+                          if (typeof v === 'object' && v !== null) return <span className="text-xs">{JSON.stringify(v)}</span>
+                          return <span>{String(v ?? '—')}</span>
+                        }
+
+                        const renderSection = (entries: [string, unknown][], label: string, color: string, badge: string) => (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{label}</h4>
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badge}`}>source</span>
+                            </div>
+                            <dl className="text-sm space-y-1">
+                              {entries.map(([k, v]) => (
                                 <div key={k} className="flex gap-2">
-                                  <dt className="text-gray-500 capitalize min-w-[120px]">
-                                    {k.replace(/_/g, ' ')}:
+                                  <dt className="text-gray-500 capitalize min-w-[130px] shrink-0">
+                                    {k.replace(/^lusha_/, '').replace(/_/g, ' ')}:
                                   </dt>
-                                  <dd className="text-gray-800">
-                                    {Array.isArray(v)
-                                      ? v.map((item, i) =>
-                                          typeof item === 'object' && item !== null
-                                            ? <span key={i} className="block text-xs">{Object.entries(item).filter(([,val]) => val).map(([ik, iv]) => `${ik}: ${iv}`).join(' · ')}</span>
-                                            : <span key={i}>{String(item)}</span>
-                                        )
-                                      : typeof v === 'object' && v !== null
-                                      ? JSON.stringify(v)
-                                      : String(v ?? '—')}
-                                  </dd>
+                                  <dd className="text-gray-800">{renderValue(v)}</dd>
                                 </div>
                               ))}
-                          </dl>
-                        </div>
-                      )}
+                            </dl>
+                          </div>
+                        )
+
+                        return (
+                          <div className={`col-span-2 grid gap-4 ${hasLusha ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {renderSection(apolloEntries, 'Apollo.io', 'text-blue-600', 'bg-blue-50 text-blue-600')}
+                            {hasLusha && renderSection(lushaEntries, 'Lusha', 'text-purple-600', 'bg-purple-50 text-purple-600')}
+                          </div>
+                        )
+                      })()}
                     </div>
                   </td>
                 </tr>
