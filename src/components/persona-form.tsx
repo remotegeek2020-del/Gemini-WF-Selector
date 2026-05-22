@@ -35,6 +35,10 @@ interface FormData {
   county: string
   highlevel_workflow_id: string
   highlevel_workflow_name: string
+  highlevel_pipeline_id: string
+  highlevel_pipeline_name: string
+  highlevel_stage_id: string
+  highlevel_stage_name: string
   color: string
   is_default: boolean
 }
@@ -45,10 +49,23 @@ interface HLWorkflow {
   status: string
 }
 
+interface HLPipelineStage {
+  id: string
+  name: string
+}
+
+interface HLPipeline {
+  id: string
+  name: string
+  stages: HLPipelineStage[]
+}
+
 export default function PersonaForm({ isOpen, onClose, onSave, persona, accountId, pipeline = 'main' }: PersonaFormProps) {
   const [workflows, setWorkflows] = useState<HLWorkflow[]>([])
   const [workflowsLoading, setWorkflowsLoading] = useState(false)
   const [workflowsError, setWorkflowsError] = useState<string | null>(null)
+  const [pipelines, setPipelines] = useState<HLPipeline[]>([])
+  const [pipelinesLoading, setPipelinesLoading] = useState(false)
   const [form, setForm] = useState<FormData>({
     name: '',
     description: '',
@@ -58,6 +75,10 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
     county: '',
     highlevel_workflow_id: '',
     highlevel_workflow_name: '',
+    highlevel_pipeline_id: '',
+    highlevel_pipeline_name: '',
+    highlevel_stage_id: '',
+    highlevel_stage_name: '',
     color: '#6366f1',
     is_default: false,
   })
@@ -89,6 +110,10 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         county: persona.county || '',
         highlevel_workflow_id: persona.highlevel_workflow_id || '',
         highlevel_workflow_name: persona.highlevel_workflow_name || '',
+        highlevel_pipeline_id: persona.highlevel_pipeline_id || '',
+        highlevel_pipeline_name: persona.highlevel_pipeline_name || '',
+        highlevel_stage_id: persona.highlevel_stage_id || '',
+        highlevel_stage_name: persona.highlevel_stage_name || '',
         color: persona.color || '#6366f1',
         is_default: persona.is_default || false,
       })
@@ -103,6 +128,10 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         county: '',
         highlevel_workflow_id: '',
         highlevel_workflow_name: '',
+        highlevel_pipeline_id: '',
+        highlevel_pipeline_name: '',
+        highlevel_stage_id: '',
+        highlevel_stage_name: '',
         color: '#6366f1',
         is_default: false,
       })
@@ -128,6 +157,13 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       })
       .catch(() => setWorkflowsError('Failed to load workflows'))
       .finally(() => setWorkflowsLoading(false))
+
+    setPipelinesLoading(true)
+    fetch(`/api/accounts/${accountId}/highlevel/pipelines`)
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setPipelines(data.pipelines || []) })
+      .catch(() => {})
+      .finally(() => setPipelinesLoading(false))
 
     fetch(`/api/agency/persona-gen-ai?accountId=${accountId}`)
       .then((r) => r.json())
@@ -159,6 +195,10 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         county: form.county.trim() || null,
         highlevel_workflow_id: form.highlevel_workflow_id.trim() || null,
         highlevel_workflow_name: form.highlevel_workflow_name.trim() || null,
+        highlevel_pipeline_id: form.highlevel_pipeline_id.trim() || null,
+        highlevel_pipeline_name: form.highlevel_pipeline_name.trim() || null,
+        highlevel_stage_id: form.highlevel_stage_id.trim() || null,
+        highlevel_stage_name: form.highlevel_stage_name.trim() || null,
         color: form.color,
         is_default: form.is_default,
         pipeline: persona?.pipeline ?? pipeline,
@@ -466,7 +506,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         </div>
 
         <div className="border-t border-gray-200 pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">Highlevel Workflow</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Highlevel Actions</h4>
           {workflowsError ? (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               {workflowsError} — configure your Highlevel key &amp; Location ID in Settings.
@@ -506,6 +546,65 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
                   </>
                 )}
               </select>
+            </div>
+          )}
+
+          {/* Pipeline → Opportunity creation */}
+          {pipelines.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Create Opportunity in Pipeline
+                </label>
+                <select
+                  value={form.highlevel_pipeline_id}
+                  onChange={(e) => {
+                    const selected = pipelines.find((p) => p.id === e.target.value)
+                    setForm((prev) => ({
+                      ...prev,
+                      highlevel_pipeline_id: e.target.value,
+                      highlevel_pipeline_name: selected?.name || '',
+                      highlevel_stage_id: '',
+                      highlevel_stage_name: '',
+                    }))
+                  }}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">{pipelinesLoading ? 'Loading…' : '— No pipeline —'}</option>
+                  {pipelines.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {form.highlevel_pipeline_id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+                  <select
+                    value={form.highlevel_stage_id}
+                    onChange={(e) => {
+                      const pipeline = pipelines.find((p) => p.id === form.highlevel_pipeline_id)
+                      const stage = pipeline?.stages.find((s) => s.id === e.target.value)
+                      setForm((prev) => ({
+                        ...prev,
+                        highlevel_stage_id: e.target.value,
+                        highlevel_stage_name: stage?.name || '',
+                      }))
+                    }}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">— Select stage —</option>
+                    {pipelines
+                      .find((p) => p.id === form.highlevel_pipeline_id)
+                      ?.stages.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+              <p className="text-xs text-gray-400">
+                When a lead matches this persona, an opportunity will be created in this pipeline stage.
+              </p>
             </div>
           )}
         </div>

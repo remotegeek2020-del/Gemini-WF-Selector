@@ -6,6 +6,7 @@ import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
 import { assignWorkflow } from '@/lib/highlevel/client'
+import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import type { AIConfig } from '@/types'
 
 export async function GET() {
@@ -118,7 +119,7 @@ async function enrichLead(accountId: string, leadId: string) {
     .from('api_keys')
     .select('service, key_value, extra_data')
     .eq('account_id', accountId)
-    .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha'])
+    .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'highlevel_custom_fields'])
 
   const keyMap = Object.fromEntries((apiKeysData || []).map((k) => [k.service, k]))
   const apolloKey = keyMap['apollo']?.key_value
@@ -172,11 +173,29 @@ async function enrichLead(accountId: string, leadId: string) {
 
   if (assignedPersonaId && highlevelKey && lead.highlevel_contact_id) {
     const matched = (personas || []).find((p) => p.id === assignedPersonaId)
+    const locationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || ''
+    const fieldIds = keyMap['highlevel_custom_fields']?.extra_data as {
+      persona_field_id: string; score_field_id: string; reasoning_field_id: string
+    } | null
+
     if (matched?.highlevel_workflow_id) {
       const wf = await assignWorkflow(highlevelKey, lead.highlevel_contact_id, matched.highlevel_workflow_id)
       if (wf.success) {
         await supabase.from('leads').update({ workflow_triggered: true, updated_at: new Date().toISOString() }).eq('id', leadId)
       }
+    }
+
+    if (matched) {
+      const isDefaultFallback = !result.persona_id && !!matched.is_default
+      await runPostEnrichmentHLActions({
+        apiKey: highlevelKey,
+        locationId,
+        contactId: lead.highlevel_contact_id,
+        persona: matched,
+        reasoning,
+        isDefaultFallback,
+        fieldIds,
+      })
     }
   }
 }

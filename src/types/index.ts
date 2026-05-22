@@ -34,6 +34,10 @@ export interface Persona {
   avatar_url: string | null
   highlevel_workflow_id: string | null
   highlevel_workflow_name: string | null
+  highlevel_pipeline_id: string | null
+  highlevel_pipeline_name: string | null
+  highlevel_stage_id: string | null
+  highlevel_stage_name: string | null
   color: string
   is_default: boolean
   pipeline: 'main' | 'nurture'

@@ -96,6 +96,9 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [personaGenAiEnabled, setPersonaGenAiEnabled] = useState(false)
   const [togglingPersonaGenAi, setTogglingPersonaGenAi] = useState(false)
   const [personaGenAiConfigured, setPersonaGenAiConfigured] = useState(false)
+  const [hlFieldsConfigured, setHlFieldsConfigured] = useState(false)
+  const [hlFieldsSetupLoading, setHlFieldsSetupLoading] = useState(false)
+  const [hlFieldsCheckDone, setHlFieldsCheckDone] = useState(false)
   const [formValues, setFormValues] = useState<
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
@@ -124,6 +127,12 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           .then((r) => r.json())
           .then((d) => setPersonaGenAiConfigured(d.configured === true))
           .catch(() => {})
+
+        // Check HL custom fields setup status
+        fetch(`/api/accounts/${accountId}/highlevel/setup-fields`)
+          .then((r) => r.json())
+          .then((d) => { setHlFieldsConfigured(d.configured === true); setHlFieldsCheckDone(true) })
+          .catch(() => setHlFieldsCheckDone(true))
 
         // Pre-populate AI model settings if they exist
         const aiModelEntry = keys.find((k) => k.service === 'ai_model')
@@ -312,6 +321,23 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     }
   }
 
+  const handleSetupHLFields = async () => {
+    setHlFieldsSetupLoading(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/highlevel/setup-fields`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Setup failed')
+      setHlFieldsConfigured(true)
+      setSuccess('HL custom fields created successfully. They will now be updated on every enriched lead.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to set up HL fields')
+    } finally {
+      setHlFieldsSetupLoading(false)
+    }
+  }
+
   const existingAiModel = getExistingKey('ai_model')
 
   return (
@@ -421,6 +447,64 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                   Copy
                 </Button>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* HL Contact Write-back */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Highlevel Contact Write-back</CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Auto-tag contacts, add AI notes, and fill custom fields on every enriched lead</p>
+            </div>
+            {hlFieldsCheckDone && (
+              <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
+                hlFieldsConfigured
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-100 text-gray-500'
+              }`}>
+                {hlFieldsConfigured ? 'Fields configured' : 'Not set up'}
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm text-gray-600 space-y-1.5">
+            <p className="flex items-start gap-2">
+              <span className="text-green-500 mt-0.5">✓</span>
+              <span><strong>Tags</strong> — persona name added as a tag automatically (no setup needed)</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-500 mt-0.5">✓</span>
+              <span><strong>Notes</strong> — AI reasoning posted as a contact note automatically (no setup needed)</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className={hlFieldsConfigured ? 'text-green-500 mt-0.5' : 'text-gray-400 mt-0.5'}>
+                {hlFieldsConfigured ? '✓' : '○'}
+              </span>
+              <span>
+                <strong>Custom Fields</strong> — creates <code className="text-xs bg-gray-100 px-1 rounded">Lead Router - Persona</code>,{' '}
+                <code className="text-xs bg-gray-100 px-1 rounded">Lead Router - Score</code>, and{' '}
+                <code className="text-xs bg-gray-100 px-1 rounded">Lead Router - Reasoning</code> fields in HL
+              </span>
+            </p>
+          </div>
+          {!hlFieldsConfigured && (
+            <div className="pt-1">
+              <Button
+                size="sm"
+                onClick={handleSetupHLFields}
+                isLoading={hlFieldsSetupLoading}
+                disabled={!getExistingKey('highlevel')}
+              >
+                Setup HL Custom Fields
+              </Button>
+              {!getExistingKey('highlevel') && (
+                <p className="text-xs text-amber-600 mt-1">Save your Highlevel API key below first.</p>
+              )}
             </div>
           )}
         </CardContent>
