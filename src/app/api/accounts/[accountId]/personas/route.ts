@@ -77,6 +77,25 @@ export async function POST(
     sample_person,
     state,
     county,
+    // Structured Sample Person
+    full_name,
+    title_role,
+    age,
+    location,
+    current_income,
+    income_goal,
+    background_story,
+    core_frustration,
+    // Structured Characteristics
+    who_they_are,
+    industry_experience,
+    primary_frustration,
+    what_they_want,
+    decision_trigger,
+    trust_barrier,
+    engagement_style,
+    best_contact_method,
+    sells_into,
     highlevel_workflow_id,
     highlevel_workflow_name,
     highlevel_pipeline_id,
@@ -88,11 +107,8 @@ export async function POST(
     pipeline,
   } = body
 
-  if (!name || !description || !characteristics) {
-    return NextResponse.json(
-      { error: 'Name, description, and characteristics are required' },
-      { status: 400 }
-    )
+  if (!name) {
+    return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
 
   const resolvedPipeline = pipeline === 'nurture' ? 'nurture' : 'main'
@@ -111,11 +127,28 @@ export async function POST(
     .insert({
       account_id: params.accountId,
       name,
-      description,
-      characteristics,
+      description: description || null,
+      characteristics: characteristics || null,
       sample_person: sample_person || null,
       state: state || null,
       county: county || null,
+      full_name: full_name || null,
+      title_role: title_role || null,
+      age: age || null,
+      location: location || null,
+      current_income: current_income || null,
+      income_goal: income_goal || null,
+      background_story: background_story || null,
+      core_frustration: core_frustration || null,
+      who_they_are: who_they_are || null,
+      industry_experience: industry_experience || null,
+      primary_frustration: primary_frustration || null,
+      what_they_want: what_they_want || null,
+      decision_trigger: decision_trigger || null,
+      trust_barrier: trust_barrier || null,
+      engagement_style: engagement_style || null,
+      best_contact_method: best_contact_method || null,
+      sells_into: sells_into || null,
       highlevel_workflow_id: highlevel_workflow_id || null,
       highlevel_workflow_name: highlevel_workflow_name || null,
       highlevel_pipeline_id: highlevel_pipeline_id || null,

@@ -31,6 +31,25 @@ export interface Persona {
   sample_person: string | null
   state: string | null
   county: string | null
+  // Structured Sample Person fields
+  full_name: string | null
+  title_role: string | null
+  age: string | null
+  location: string | null
+  current_income: string | null
+  income_goal: string | null
+  background_story: string | null
+  core_frustration: string | null
+  // Structured Characteristics fields
+  who_they_are: string | null
+  industry_experience: string | null
+  primary_frustration: string | null
+  what_they_want: string | null
+  decision_trigger: string | null
+  trust_barrier: string | null
+  engagement_style: string | null
+  best_contact_method: string | null
+  sells_into: string | null
   avatar_url: string | null
   highlevel_workflow_id: string | null
   highlevel_workflow_name: string | null
