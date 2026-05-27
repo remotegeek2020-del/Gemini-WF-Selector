@@ -47,3 +47,46 @@ export async function GET(
 
   return NextResponse.json({ leads: data, total: count })
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { accountId: string } }
+) {
+  const supabase = createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: roleData } = await supabase
+    .from('user_roles')
+    .select('role, account_id')
+    .eq('user_id', user.id)
+    .single()
+
+  if (!roleData) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (roleData.role === 'sub_account' && roleData.account_id !== params.accountId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let body: { ids?: string[] }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const { ids } = body
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids must be a non-empty array' }, { status: 400 })
+  }
+
+  const { error } = await supabase
+    .from('leads')
+    .delete()
+    .eq('account_id', params.accountId)
+    .in('id', ids)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ deleted: ids.length })
+}
