@@ -87,8 +87,8 @@ export async function PUT(
     .from('personas')
     .update({
       name,
-      description: description || null,
-      characteristics: characteristics || null,
+      description: description || '',
+      characteristics: characteristics || '',
       sample_person: sample_person || null,
       state: state || null,
       county: county || null,

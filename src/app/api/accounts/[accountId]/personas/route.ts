@@ -127,8 +127,8 @@ export async function POST(
     .insert({
       account_id: params.accountId,
       name,
-      description: description || null,
-      characteristics: characteristics || null,
+      description: description || '',
+      characteristics: characteristics || '',
       sample_person: sample_person || null,
       state: state || null,
       county: county || null,
