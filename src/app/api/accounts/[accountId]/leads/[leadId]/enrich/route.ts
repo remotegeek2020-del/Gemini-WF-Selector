@@ -140,35 +140,51 @@ export async function POST(
 
     const finalStatus = assignedPersonaId ? 'assigned' : 'no_persona'
 
-    await supabase
-      .from('leads')
-      .update({
-        enriched_data: result.enriched_data,
-        assigned_persona_id: assignedPersonaId,
-        persona_reasoning: reasoning,
-        status: finalStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', leadId)
+    // Extract enriched name/phone/email from Apollo or Lusha
+    const ed = (result.enriched_data || {}) as Record<string, unknown>
+    const org = ed.organization as Record<string, unknown> | undefined
+    const enrichedFirstName = (ed.first_name as string | undefined) || undefined
+    const enrichedLastName = (ed.last_name as string | undefined) || undefined
+    const enrichedEmail = (ed.email as string | undefined) || undefined
+    const enrichedPhone =
+      (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
+      (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
+      undefined
+    const enrichedCompany =
+      (org?.name as string | undefined) ||
+      (ed.lusha_company_name as string | undefined) ||
+      undefined
+
+    // Build lead update — always refresh enriched_data; also backfill
+    // first_name/last_name/email/phone from Apollo if the lead arrived with blanks
+    const leadUpdate: Record<string, unknown> = {
+      enriched_data: result.enriched_data,
+      assigned_persona_id: assignedPersonaId,
+      persona_reasoning: reasoning,
+      status: finalStatus,
+      updated_at: new Date().toISOString(),
+    }
+    if (enrichedFirstName && !lead.first_name) leadUpdate.first_name = enrichedFirstName
+    if (enrichedLastName && !lead.last_name) leadUpdate.last_name = enrichedLastName
+    if (enrichedEmail && !lead.email) leadUpdate.email = enrichedEmail
+    if (enrichedPhone && !lead.phone) leadUpdate.phone = enrichedPhone
+
+    await supabase.from('leads').update(leadUpdate).eq('id', leadId)
 
     // Write enriched contact data back to HighLevel (name, email, phone, company)
-    if (highlevelKey && lead.highlevel_contact_id) {
-      const ed = (result.enriched_data || {}) as Record<string, unknown>
-      const org = ed.organization as Record<string, unknown> | undefined
-
-      // Prefer Lusha phone (more direct), fall back to Apollo
-      const enrichedPhone =
-        (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
-        (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
-        undefined
-
-      updateContactProfile(highlevelKey, lead.highlevel_contact_id, {
-        firstName: (ed.first_name as string | undefined) || undefined,
-        lastName: (ed.last_name as string | undefined) || undefined,
-        email: (ed.email as string | undefined) || undefined,
-        phone: enrichedPhone,
-        companyName: (org?.name as string | undefined) || (ed.lusha_company_name as string | undefined) || undefined,
-      }).catch((e) => console.error('[HL] contact profile update failed:', e))
+    if (highlevelKey) {
+      const contactId = lead.highlevel_contact_id
+      if (contactId) {
+        updateContactProfile(highlevelKey, contactId, {
+          firstName: enrichedFirstName,
+          lastName: enrichedLastName,
+          email: enrichedEmail,
+          phone: enrichedPhone,
+          companyName: enrichedCompany,
+        }).catch((e) => console.error('[HL] contact profile update failed:', e))
+      } else {
+        console.warn('[HL] skipping contact update — no highlevel_contact_id on lead', leadId)
+      }
     }
 
     // Trigger Highlevel workflow only if a persona was matched or defaulted
