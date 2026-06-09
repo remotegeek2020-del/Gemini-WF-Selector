@@ -68,6 +68,8 @@ export function formatApolloDataForGemini(person: ApolloPersonData | null): Reco
 
   return {
     name: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
+    first_name: person.first_name,
+    last_name: person.last_name,
     email: person.email,
     title: person.title,
     seniority: person.seniority,

@@ -143,16 +143,27 @@ export async function POST(
 
     // Extract enriched name/phone/email from Apollo or Lusha
     const ed = (result.enriched_data || {}) as Record<string, unknown>
-    const org = ed.organization as Record<string, unknown> | undefined
-    const enrichedFirstName = (ed.first_name as string | undefined) || undefined
-    const enrichedLastName = (ed.last_name as string | undefined) || undefined
-    const enrichedEmail = (ed.email as string | undefined) || undefined
+    const apolloRaw = (ed.apollo_raw || {}) as Record<string, unknown>
+    const org = (apolloRaw.organization || ed.organization) as Record<string, unknown> | undefined
+    const enrichedFirstName =
+      (ed.first_name as string | undefined) ||
+      (apolloRaw.first_name as string | undefined) ||
+      undefined
+    const enrichedLastName =
+      (ed.last_name as string | undefined) ||
+      (apolloRaw.last_name as string | undefined) ||
+      undefined
+    const enrichedEmail =
+      (ed.email as string | undefined) ||
+      (apolloRaw.email as string | undefined) ||
+      undefined
     const enrichedPhone =
       (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
       (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
       undefined
     const enrichedCompany =
       (org?.name as string | undefined) ||
+      (ed.current_company as string | undefined) ||
       (ed.lusha_company_name as string | undefined) ||
       undefined
 
