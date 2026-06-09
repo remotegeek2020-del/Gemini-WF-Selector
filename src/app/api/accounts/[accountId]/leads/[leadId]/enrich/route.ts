@@ -185,8 +185,7 @@ export async function POST(
           supabase.from('leads')
             .update({ highlevel_contact_id: foundId, updated_at: new Date().toISOString() })
             .eq('id', leadId)
-            .then(() => {})
-            .catch((e) => console.error('[HL] failed to store contact_id:', e))
+            .then(({ error }) => { if (error) console.error('[HL] failed to store contact_id:', error) })
         }
       }
 
