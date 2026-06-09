@@ -113,6 +113,33 @@ export async function updateContactCustomFields(
   if (!res.ok) throw new Error(`HL update contact ${res.status}: ${await res.text()}`)
 }
 
+export interface ContactProfileUpdate {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  companyName?: string
+}
+
+export async function updateContactProfile(
+  apiKey: string,
+  contactId: string,
+  profile: ContactProfileUpdate
+) {
+  // Strip out undefined/empty values so we don't overwrite with blanks
+  const payload = Object.fromEntries(
+    Object.entries(profile).filter(([, v]) => v && String(v).trim())
+  )
+  if (Object.keys(payload).length === 0) return
+
+  const res = await fetch(`${HL_BASE}/contacts/${contactId}`, {
+    method: 'PUT',
+    headers: headers(apiKey),
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`HL update contact profile ${res.status}: ${await res.text()}`)
+}
+
 // ── Pipelines ─────────────────────────────────────────────────────────────────
 
 export interface HLPipelineStage {

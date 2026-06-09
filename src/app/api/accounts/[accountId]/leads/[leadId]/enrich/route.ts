@@ -4,7 +4,7 @@ export const maxDuration = 60
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile } from '@/lib/highlevel/client'
 import type { AIConfig } from '@/types'
 
 export async function POST(
@@ -150,6 +150,26 @@ export async function POST(
         updated_at: new Date().toISOString(),
       })
       .eq('id', leadId)
+
+    // Write enriched contact data back to HighLevel (name, email, phone, company)
+    if (highlevelKey && lead.highlevel_contact_id) {
+      const ed = (result.enriched_data || {}) as Record<string, unknown>
+      const org = ed.organization as Record<string, unknown> | undefined
+
+      // Prefer Lusha phone (more direct), fall back to Apollo
+      const enrichedPhone =
+        (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
+        (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
+        undefined
+
+      updateContactProfile(highlevelKey, lead.highlevel_contact_id, {
+        firstName: (ed.first_name as string | undefined) || undefined,
+        lastName: (ed.last_name as string | undefined) || undefined,
+        email: (ed.email as string | undefined) || undefined,
+        phone: enrichedPhone,
+        companyName: (org?.name as string | undefined) || (ed.lusha_company_name as string | undefined) || undefined,
+      }).catch((e) => console.error('[HL] contact profile update failed:', e))
+    }
 
     // Trigger Highlevel workflow only if a persona was matched or defaulted
     if (assignedPersonaId && finalStatus === 'assigned' && highlevelKey && lead.highlevel_contact_id) {
