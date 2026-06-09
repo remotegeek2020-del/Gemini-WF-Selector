@@ -113,6 +113,27 @@ export async function updateContactCustomFields(
   if (!res.ok) throw new Error(`HL update contact ${res.status}: ${await res.text()}`)
 }
 
+export async function lookupContactByEmail(
+  apiKey: string,
+  locationId: string,
+  email: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${HL_BASE}/contacts/search?locationId=${encodeURIComponent(locationId)}&q=${encodeURIComponent(email)}`,
+      { headers: headers(apiKey) }
+    )
+    if (!res.ok) return null
+    const data = await res.json() as { contacts?: { id: string; email?: string }[] }
+    const match = (data.contacts || []).find(
+      (c) => c.email?.toLowerCase() === email.toLowerCase()
+    )
+    return match?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 export interface ContactProfileUpdate {
   firstName?: string
   lastName?: string
