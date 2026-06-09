@@ -4,7 +4,7 @@ export const maxDuration = 60
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow, updateContactProfile } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
 import type { AIConfig } from '@/types'
 
 export async function POST(
@@ -70,6 +70,7 @@ export async function POST(
 
     const apolloKey = keyMap['apollo']?.key_value
     const highlevelKey = keyMap['highlevel']?.key_value
+    const highlevelLocationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || null
     const lushaKey = keyMap['lusha']?.key_value || undefined
 
     if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
@@ -173,7 +174,22 @@ export async function POST(
 
     // Write enriched contact data back to HighLevel (name, email, phone, company)
     if (highlevelKey) {
-      const contactId = lead.highlevel_contact_id
+      let contactId = lead.highlevel_contact_id
+
+      // If no contact ID stored, look up by email in HL
+      if (!contactId && highlevelLocationId && (lead.email || enrichedEmail)) {
+        const lookupEmail = (lead.email || enrichedEmail)!
+        const foundId = await lookupContactByEmail(highlevelKey, highlevelLocationId, lookupEmail)
+        if (foundId) {
+          contactId = foundId
+          supabase.from('leads')
+            .update({ highlevel_contact_id: foundId, updated_at: new Date().toISOString() })
+            .eq('id', leadId)
+            .then(() => {})
+            .catch((e) => console.error('[HL] failed to store contact_id:', e))
+        }
+      }
+
       if (contactId) {
         updateContactProfile(highlevelKey, contactId, {
           firstName: enrichedFirstName,
@@ -183,7 +199,7 @@ export async function POST(
           companyName: enrichedCompany,
         }).catch((e) => console.error('[HL] contact profile update failed:', e))
       } else {
-        console.warn('[HL] skipping contact update — no highlevel_contact_id on lead', leadId)
+        console.warn('[HL] no HL contact found for lead', leadId, 'email:', lead.email)
       }
     }
 
