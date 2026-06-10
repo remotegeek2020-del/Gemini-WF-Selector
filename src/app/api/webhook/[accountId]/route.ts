@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import type { AIConfig } from '@/types'
 
@@ -163,34 +163,86 @@ async function enrichLead(accountId: string, leadId: string) {
 
   const finalStatus = assignedPersonaId ? 'assigned' : 'no_persona'
 
-  await supabase.from('leads').update({
+  // Extract enriched name/phone/company from Apollo data
+  const ed = (result.enriched_data || {}) as Record<string, unknown>
+  const apolloRaw = (ed.apollo_raw || {}) as Record<string, unknown>
+  const enrichedFirstName = (ed.first_name as string | undefined) || (apolloRaw.first_name as string | undefined) || undefined
+  const enrichedLastName = (ed.last_name as string | undefined) || (apolloRaw.last_name as string | undefined) || undefined
+  const enrichedEmail = (ed.email as string | undefined) || (apolloRaw.email as string | undefined) || undefined
+  const enrichedPhone =
+    (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
+    (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
+    undefined
+  const org = (apolloRaw.organization || ed.organization) as Record<string, unknown> | undefined
+  const enrichedCompany = (ed.current_company as string | undefined) || (org?.name as string | undefined) || undefined
+
+  // Build lead update — backfill name/email/phone if the lead arrived with blanks
+  const leadUpdate: Record<string, unknown> = {
     enriched_data: result.enriched_data,
     assigned_persona_id: assignedPersonaId,
     persona_reasoning: reasoning,
     status: finalStatus,
     updated_at: new Date().toISOString(),
-  }).eq('id', leadId)
+  }
+  if (enrichedFirstName && !lead.first_name) leadUpdate.first_name = enrichedFirstName
+  if (enrichedLastName && !lead.last_name) leadUpdate.last_name = enrichedLastName
+  if (enrichedEmail && !lead.email) leadUpdate.email = enrichedEmail
+  if (enrichedPhone && !lead.phone) leadUpdate.phone = enrichedPhone
 
-  if (assignedPersonaId && highlevelKey && lead.highlevel_contact_id) {
+  await supabase.from('leads').update(leadUpdate).eq('id', leadId)
+
+  const locationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || ''
+
+  // Push enriched contact data back to HighLevel
+  if (highlevelKey) {
+    let contactId = lead.highlevel_contact_id
+
+    // If no contact ID stored, look up by email in HL
+    if (!contactId && locationId && (lead.email || enrichedEmail)) {
+      const lookupEmail = (lead.email || enrichedEmail)!
+      const foundId = await lookupContactByEmail(highlevelKey, locationId, lookupEmail)
+      if (foundId) {
+        contactId = foundId
+        supabase.from('leads')
+          .update({ highlevel_contact_id: foundId, updated_at: new Date().toISOString() })
+          .eq('id', leadId)
+          .then(({ error }) => { if (error) console.error('[HL] failed to store contact_id:', error) })
+      }
+    }
+
+    if (contactId) {
+      updateContactProfile(highlevelKey, contactId, {
+        firstName: enrichedFirstName,
+        lastName: enrichedLastName,
+        email: enrichedEmail,
+        phone: enrichedPhone,
+        companyName: enrichedCompany,
+      }).catch((e) => console.error('[HL] contact profile update failed:', e))
+    } else {
+      console.warn('[HL] no HL contact found for lead', leadId, 'email:', lead.email)
+    }
+  }
+
+  if (assignedPersonaId && highlevelKey) {
     const matched = (personas || []).find((p) => p.id === assignedPersonaId)
-    const locationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || ''
     const fieldIds = keyMap['highlevel_custom_fields']?.extra_data as {
       persona_field_id: string; score_field_id: string; reasoning_field_id: string
     } | null
+    const contactId = lead.highlevel_contact_id
 
-    if (matched?.highlevel_workflow_id) {
-      const wf = await assignWorkflow(highlevelKey, lead.highlevel_contact_id, matched.highlevel_workflow_id)
+    if (matched?.highlevel_workflow_id && contactId) {
+      const wf = await assignWorkflow(highlevelKey, contactId, matched.highlevel_workflow_id)
       if (wf.success) {
         await supabase.from('leads').update({ workflow_triggered: true, updated_at: new Date().toISOString() }).eq('id', leadId)
       }
     }
 
-    if (matched) {
+    if (matched && contactId) {
       const isDefaultFallback = !result.persona_id && !!matched.is_default
       await runPostEnrichmentHLActions({
         apiKey: highlevelKey,
         locationId,
-        contactId: lead.highlevel_contact_id,
+        contactId,
         persona: matched,
         reasoning,
         isDefaultFallback,
