@@ -122,6 +122,8 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [globalEmails, setGlobalEmails] = useState<string[]>([])
   const [globalEmailInput, setGlobalEmailInput] = useState('')
   const [savingGlobalEmails, setSavingGlobalEmails] = useState(false)
+  const [testingEmail, setTestingEmail] = useState(false)
+  const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     setWebhookSecret(accountId.replace(/-/g, '').substring(0, 16))
@@ -676,6 +678,36 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             >
               Save Notification Emails
             </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              isLoading={testingEmail}
+              onClick={async () => {
+                setTestingEmail(true)
+                setTestEmailResult(null)
+                try {
+                  const res = await fetch(`/api/accounts/${accountId}/settings/test-email`, { method: 'POST' })
+                  const data = await res.json()
+                  if (res.ok) {
+                    setTestEmailResult({ ok: true, message: data.message })
+                  } else {
+                    const detail = data.details ? JSON.stringify(data.details) : ''
+                    setTestEmailResult({ ok: false, message: `${data.error}${detail ? ` — ${detail}` : ''}` })
+                  }
+                } catch (e) {
+                  setTestEmailResult({ ok: false, message: e instanceof Error ? e.message : 'Request failed' })
+                } finally {
+                  setTestingEmail(false)
+                }
+              }}
+            >
+              Send Test Email
+            </Button>
+            {testEmailResult && (
+              <p className={`text-xs mt-1 ${testEmailResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                {testEmailResult.message}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
