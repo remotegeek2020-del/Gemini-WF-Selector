@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Persona } from '@/types'
+import type { Persona, Pipeline } from '@/types'
 import PersonaForm from '@/components/persona-form'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
-type Pipeline = 'main' | 'nurture'
-
 export default function AccountPersonasPage({ params }: { params: { accountId: string } }) {
   const { accountId } = params
-  const [activePipeline, setActivePipeline] = useState<Pipeline>('main')
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [activePipeline, setActivePipeline] = useState<string>('main')
   const [personas, setPersonas] = useState<Persona[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -18,7 +17,21 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchPersonas = async (pipeline: Pipeline) => {
+  useEffect(() => {
+    fetch(`/api/accounts/${accountId}/pipelines`)
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Pipeline[] = d.pipelines || []
+        setPipelines(list)
+        if (list.length > 0 && !list.find((p) => p.slug === activePipeline)) {
+          setActivePipeline(list[0].slug)
+        }
+      })
+      .catch(console.error)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId])
+
+  const fetchPersonas = async (pipeline: string) => {
     setIsLoading(true)
     setError(null)
     try {
@@ -86,7 +99,7 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
     setEditingPersona(null)
   }
 
-  const pipelineLabel = activePipeline === 'main' ? 'New Lead' : 'Nurture'
+  const activePipelineName = pipelines.find((p) => p.slug === activePipeline)?.name || activePipeline
 
   return (
     <div>
@@ -101,26 +114,28 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New {pipelineLabel} Persona
+          New Persona
         </Button>
       </div>
 
       {/* Pipeline tabs */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit mb-6">
-        {(['main', 'nurture'] as Pipeline[]).map((p) => (
-          <button
-            key={p}
-            onClick={() => setActivePipeline(p)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              activePipeline === p
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {p === 'main' ? 'New Leads' : 'Nurture'}
-          </button>
-        ))}
-      </div>
+      {pipelines.length > 1 && (
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit mb-6 flex-wrap">
+          {pipelines.map((p) => (
+            <button
+              key={p.slug}
+              onClick={() => setActivePipeline(p.slug)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activePipeline === p.slug
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -141,13 +156,13 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <h3 className="mt-3 text-sm font-semibold text-gray-500">
-            No {pipelineLabel.toLowerCase()} personas yet
+            No personas yet for {activePipelineName}
           </h3>
           <p className="text-xs text-gray-400 mt-1 mb-4">
-            Create personas to classify your {activePipeline === 'main' ? 'new' : 'nurture'} leads automatically
+            Create personas to classify leads in this pipeline automatically
           </p>
           <Button onClick={() => setIsFormOpen(true)} size="sm">
-            Create your first {pipelineLabel.toLowerCase()} persona
+            Create your first persona
           </Button>
         </div>
       ) : (

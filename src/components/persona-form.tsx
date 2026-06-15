@@ -23,7 +23,7 @@ interface PersonaFormProps {
   onSave: (data: Partial<Persona>) => Promise<void>
   persona?: Persona | null
   accountId: string
-  pipeline?: 'main' | 'nurture'
+  pipeline?: string
 }
 
 interface FormData {
@@ -131,6 +131,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false)
   const [avatarError, setAvatarError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [notificationEmails, setNotificationEmails] = useState<string[]>([])
+  const [notifEmailInput, setNotifEmailInput] = useState('')
 
   useEffect(() => {
     if (persona) {
@@ -165,10 +167,13 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         is_default: persona.is_default || false,
       })
       setAvatarUrl(persona.avatar_url || null)
+      setNotificationEmails(persona.notification_emails || [])
     } else {
       setForm(emptyForm)
       setAvatarUrl(null)
+      setNotificationEmails([])
     }
+    setNotifEmailInput('')
     setErrors({})
     setAiPrompt('')
     setAiError(null)
@@ -250,6 +255,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         color: form.color,
         is_default: form.is_default,
         pipeline: persona?.pipeline ?? pipeline,
+        notification_emails: notificationEmails,
       })
       onClose()
     } catch (err) {
@@ -650,6 +656,54 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.is_default ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
+        </div>
+
+        {/* Notification Emails */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notification Emails</label>
+          <p className="text-xs text-gray-500 mb-2">Email addresses to notify when a lead is assigned to this persona</p>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="email"
+              value={notifEmailInput}
+              onChange={(e) => setNotifEmailInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault()
+                  const email = notifEmailInput.trim()
+                  if (email && !notificationEmails.includes(email)) {
+                    setNotificationEmails((prev) => [...prev, email])
+                    setNotifEmailInput('')
+                  }
+                }
+              }}
+              placeholder="email@example.com"
+              className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const email = notifEmailInput.trim()
+                if (email && !notificationEmails.includes(email)) {
+                  setNotificationEmails((prev) => [...prev, email])
+                  setNotifEmailInput('')
+                }
+              }}
+              className="px-3 py-2 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md hover:bg-indigo-100"
+            >
+              Add
+            </button>
+          </div>
+          {notificationEmails.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {notificationEmails.map((email) => (
+                <span key={email} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                  {email}
+                  <button type="button" onClick={() => setNotificationEmails((prev) => prev.filter((e) => e !== email))} className="text-gray-400 hover:text-red-500">×</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Color */}

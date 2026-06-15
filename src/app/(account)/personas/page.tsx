@@ -2,16 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Persona } from '@/types'
+import type { Persona, Pipeline } from '@/types'
 import PersonaForm from '@/components/persona-form'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
-type Pipeline = 'main' | 'nurture'
-
 export default function SubAccountPersonasPage() {
   const [accountId, setAccountId] = useState<string | null>(null)
-  const [activePipeline, setActivePipeline] = useState<Pipeline>('main')
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [activePipeline, setActivePipeline] = useState<string>('main')
   const [personas, setPersonas] = useState<Persona[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -34,7 +33,22 @@ export default function SubAccountPersonasPage() {
     getAccountId()
   }, [])
 
-  const fetchPersonas = async (id: string, pipeline: Pipeline) => {
+  useEffect(() => {
+    if (!accountId) return
+    fetch(`/api/accounts/${accountId}/pipelines`)
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Pipeline[] = d.pipelines || []
+        setPipelines(list)
+        if (list.length > 0 && !list.find((p) => p.slug === activePipeline)) {
+          setActivePipeline(list[0].slug)
+        }
+      })
+      .catch(console.error)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId])
+
+  const fetchPersonas = async (id: string, pipeline: string) => {
     setIsLoading(true)
     setError(null)
     try {
@@ -79,7 +93,6 @@ export default function SubAccountPersonasPage() {
   const handleDelete = async (id: string) => {
     if (!accountId) return
     if (!confirm('Delete this persona? Leads assigned to it will become unassigned.')) return
-
     setDeletingId(id)
     try {
       const res = await fetch(`/api/accounts/${accountId}/personas/${id}`, { method: 'DELETE' })
@@ -94,17 +107,7 @@ export default function SubAccountPersonasPage() {
     }
   }
 
-  const handleEdit = (persona: Persona) => {
-    setEditingPersona(persona)
-    setIsFormOpen(true)
-  }
-
-  const handleCloseForm = () => {
-    setIsFormOpen(false)
-    setEditingPersona(null)
-  }
-
-  const pipelineLabel = activePipeline === 'main' ? 'New Lead' : 'Nurture'
+  const activePipelineName = pipelines.find((p) => p.slug === activePipeline)?.name || activePipeline
 
   return (
     <div>
@@ -117,26 +120,28 @@ export default function SubAccountPersonasPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          New {pipelineLabel} Persona
+          New Persona
         </Button>
       </div>
 
       {/* Pipeline tabs */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit mb-6">
-        {(['main', 'nurture'] as Pipeline[]).map((p) => (
-          <button
-            key={p}
-            onClick={() => setActivePipeline(p)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              activePipeline === p
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {p === 'main' ? 'New Leads' : 'Nurture'}
-          </button>
-        ))}
-      </div>
+      {pipelines.length > 1 && (
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit mb-6 flex-wrap">
+          {pipelines.map((p) => (
+            <button
+              key={p.slug}
+              onClick={() => setActivePipeline(p.slug)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                activePipeline === p.slug
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -156,11 +161,9 @@ export default function SubAccountPersonasPage() {
           <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <h3 className="mt-3 text-sm font-semibold text-gray-500">No {pipelineLabel.toLowerCase()} personas yet</h3>
-          <p className="text-xs text-gray-400 mt-1 mb-4">
-            Create personas to classify your {activePipeline === 'main' ? 'new' : 'nurture'} leads automatically
-          </p>
-          <Button onClick={() => setIsFormOpen(true)} size="sm">Create your first {pipelineLabel.toLowerCase()} persona</Button>
+          <h3 className="mt-3 text-sm font-semibold text-gray-500">No personas yet for {activePipelineName}</h3>
+          <p className="text-xs text-gray-400 mt-1 mb-4">Create personas to classify leads in this pipeline automatically</p>
+          <Button onClick={() => setIsFormOpen(true)} size="sm">Create your first persona</Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -170,20 +173,22 @@ export default function SubAccountPersonasPage() {
                 <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: persona.color }} />
                 <h3 className="font-semibold text-gray-900 flex-1 truncate">{persona.name}</h3>
                 {persona.is_default && (
-                  <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex-shrink-0">
-                    Default
-                  </span>
+                  <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full flex-shrink-0">Default</span>
                 )}
               </div>
               <div className="px-5 py-4 flex-1 space-y-3">
-                <div>
-                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Description</span>
-                  <p className="text-sm text-gray-700 mt-1 line-clamp-2">{persona.description}</p>
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Characteristics</span>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-3">{persona.characteristics}</p>
-                </div>
+                {persona.who_they_are && (
+                  <div>
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Who They Are</span>
+                    <p className="text-sm text-gray-700 mt-1 line-clamp-2">{persona.who_they_are}</p>
+                  </div>
+                )}
+                {!persona.who_they_are && persona.description && (
+                  <div>
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                    <p className="text-sm text-gray-700 mt-1 line-clamp-2">{persona.description}</p>
+                  </div>
+                )}
                 {persona.highlevel_workflow_name && (
                   <div className="flex items-center gap-1.5 text-xs text-indigo-600 bg-indigo-50 rounded px-2 py-1">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,17 +197,18 @@ export default function SubAccountPersonasPage() {
                     {persona.highlevel_workflow_name}
                   </div>
                 )}
+                {(persona.notification_emails || []).length > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 rounded px-2 py-1">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    {persona.notification_emails.length} notification email{persona.notification_emails.length !== 1 ? 's' : ''}
+                  </div>
+                )}
               </div>
               <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={() => handleEdit(persona)}>Edit</Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  isLoading={deletingId === persona.id}
-                  onClick={() => handleDelete(persona.id)}
-                >
-                  Delete
-                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setEditingPersona(persona); setIsFormOpen(true) }}>Edit</Button>
+                <Button size="sm" variant="danger" isLoading={deletingId === persona.id} onClick={() => handleDelete(persona.id)}>Delete</Button>
               </div>
             </Card>
           ))}
@@ -211,7 +217,7 @@ export default function SubAccountPersonasPage() {
 
       <PersonaForm
         isOpen={isFormOpen}
-        onClose={handleCloseForm}
+        onClose={() => { setIsFormOpen(false); setEditingPersona(null) }}
         onSave={handleSave}
         persona={editingPersona}
         accountId={accountId || ''}

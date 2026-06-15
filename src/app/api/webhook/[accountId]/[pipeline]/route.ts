@@ -16,29 +16,29 @@ export async function GET() {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { accountId: string } }
+  { params }: { params: { accountId: string; pipeline: string } }
 ) {
-  const { accountId } = params
+  const { accountId, pipeline } = params
   const { searchParams } = new URL(request.url)
   const secret = searchParams.get('secret')
 
-  // The secret is the first 16 chars of accountId with hyphens removed
-  // Validate if provided (optional extra security)
   const expectedSecret = accountId.replace(/-/g, '').substring(0, 16)
   if (secret && secret !== expectedSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Verify account exists
   const supabase = createAdminClient()
-  const { data: account, error: accountError } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('id', accountId)
+
+  // Verify the pipeline exists for this account
+  const { data: pipelineRecord } = await supabase
+    .from('pipelines')
+    .select('id, slug')
+    .eq('account_id', accountId)
+    .eq('slug', pipeline)
     .single()
 
-  if (accountError || !account) {
-    return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+  if (!pipelineRecord) {
+    return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 })
   }
 
   let body: Record<string, unknown>
@@ -48,26 +48,19 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  // Extract contact data from Highlevel webhook payload
   const contactId = (body.contactId || body.id || body.contact_id) as string | undefined
   const firstName = (body.firstName || body.first_name) as string | undefined
   const lastName = (body.lastName || body.last_name) as string | undefined
   const email = body.email as string | undefined
   const phone = (body.phone || body.phoneRaw) as string | undefined
 
-  // Determine source from tags or custom fields
   let source = 'other'
   const rawTags = body.tags
   const tags = Array.isArray(rawTags) ? rawTags : typeof rawTags === 'string' ? [rawTags] : []
   const tagsLower = tags.map((t: string) => t.toLowerCase())
-
-  if (tagsLower.some((t) => t.includes('facebook') || t.includes('fb'))) {
-    source = 'facebook'
-  } else if (tagsLower.some((t) => t.includes('linkedin'))) {
-    source = 'linkedin'
-  } else if (tagsLower.some((t) => t.includes('google'))) {
-    source = 'google'
-  }
+  if (tagsLower.some((t) => t.includes('facebook') || t.includes('fb'))) source = 'facebook'
+  else if (tagsLower.some((t) => t.includes('linkedin'))) source = 'linkedin'
+  else if (tagsLower.some((t) => t.includes('google'))) source = 'google'
 
   const customFields = body.customFields as Record<string, unknown>[] | undefined
   if (customFields && Array.isArray(customFields)) {
@@ -79,7 +72,6 @@ export async function POST(
     }
   }
 
-  // Create lead record scoped to this account
   const { data: lead, error: insertError } = await supabase
     .from('leads')
     .insert({
@@ -92,6 +84,7 @@ export async function POST(
       source,
       raw_data: body,
       status: 'pending',
+      pipeline,
     })
     .select()
     .single()
@@ -101,14 +94,14 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 })
   }
 
-  waitUntil(enrichLead(accountId, lead.id).catch((err) => {
+  waitUntil(enrichLead(accountId, lead.id, pipeline).catch((err) => {
     console.error('Failed to trigger enrichment:', err)
   }))
 
   return NextResponse.json({ success: true, leadId: lead.id }, { status: 200 })
 }
 
-async function enrichLead(accountId: string, leadId: string) {
+async function enrichLead(accountId: string, leadId: string, pipeline: string) {
   const supabase = createAdminClient()
 
   const { data: lead } = await supabase.from('leads').select('*').eq('id', leadId).single()
@@ -154,7 +147,12 @@ async function enrichLead(accountId: string, leadId: string) {
     return
   }
 
-  const { data: personas } = await supabase.from('personas').select('*').eq('account_id', accountId).eq('pipeline', 'main').order('created_at', { ascending: true })
+  const { data: personas } = await supabase
+    .from('personas')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('pipeline', pipeline)
+    .order('created_at', { ascending: true })
 
   const result = await runEnrichmentAgent(aiConfig, apolloKey, {
     firstName: lead.first_name, lastName: lead.last_name, email: lead.email,
@@ -174,22 +172,20 @@ async function enrichLead(accountId: string, leadId: string) {
 
   const finalStatus = assignedPersonaId ? 'assigned' : 'no_persona'
 
-  // Extract enriched name/phone/company from Apollo data
+  // Extract enriched name/phone/company
   const ed = (result.enriched_data || {}) as Record<string, unknown>
   const apolloRaw = (ed.apollo_raw || {}) as Record<string, unknown>
-  const enrichedFirstName = (ed.first_name as string | undefined) || (apolloRaw.first_name as string | undefined) || undefined
-  const enrichedLastName = (ed.last_name as string | undefined) || (apolloRaw.last_name as string | undefined) || undefined
-  const enrichedEmail = (ed.email as string | undefined) || (apolloRaw.email as string | undefined) || undefined
+  const enrichedFirstName = (ed.first_name as string) || (apolloRaw.first_name as string) || undefined
+  const enrichedLastName = (ed.last_name as string) || (apolloRaw.last_name as string) || undefined
+  const enrichedEmail = (ed.email as string) || (apolloRaw.email as string) || undefined
   const enrichedPhone =
     (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
-    (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
-    undefined
+    (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number || undefined
   const org = (apolloRaw.organization || ed.organization) as Record<string, unknown> | undefined
-  const enrichedCompany = (ed.current_company as string | undefined) || (org?.name as string | undefined) || undefined
-  const enrichedTitle = (ed.title as string | undefined) || (apolloRaw.title as string | undefined) || undefined
-  const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || undefined
+  const enrichedCompany = (ed.current_company as string) || (org?.name as string) || undefined
+  const enrichedTitle = (ed.title as string) || (apolloRaw.title as string) || undefined
+  const enrichedLinkedin = (ed.linkedin_url as string) || (apolloRaw.linkedin_url as string) || undefined
 
-  // Build lead update — backfill name/email/phone if the lead arrived with blanks
   const leadUpdate: Record<string, unknown> = {
     enriched_data: result.enriched_data,
     assigned_persona_id: assignedPersonaId,
@@ -206,14 +202,11 @@ async function enrichLead(accountId: string, leadId: string) {
 
   const locationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || ''
 
-  // Push enriched contact data back to HighLevel
+  // Push enriched contact data to HighLevel
   if (highlevelKey) {
     let contactId = lead.highlevel_contact_id
-
-    // If no contact ID stored, look up by email in HL
     if (!contactId && locationId && (lead.email || enrichedEmail)) {
-      const lookupEmail = (lead.email || enrichedEmail)!
-      const foundId = await lookupContactByEmail(highlevelKey, locationId, lookupEmail)
+      const foundId = await lookupContactByEmail(highlevelKey, locationId, (lead.email || enrichedEmail)!)
       if (foundId) {
         contactId = foundId
         supabase.from('leads')
@@ -222,7 +215,6 @@ async function enrichLead(accountId: string, leadId: string) {
           .then(({ error }) => { if (error) console.error('[HL] failed to store contact_id:', error) })
       }
     }
-
     if (contactId) {
       updateContactProfile(highlevelKey, contactId, {
         firstName: enrichedFirstName,
@@ -231,41 +223,32 @@ async function enrichLead(accountId: string, leadId: string) {
         phone: enrichedPhone,
         companyName: enrichedCompany,
       }).catch((e) => console.error('[HL] contact profile update failed:', e))
-    } else {
-      console.warn('[HL] no HL contact found for lead', leadId, 'email:', lead.email)
     }
   }
 
-  if (assignedPersonaId && highlevelKey) {
-    const matched = (personas || []).find((p) => p.id === assignedPersonaId)
+  const matched = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
+
+  // HL workflow + post-enrichment actions
+  if (matched && highlevelKey) {
+    const contactId = lead.highlevel_contact_id
     const fieldIds = keyMap['highlevel_custom_fields']?.extra_data as {
       persona_field_id: string; score_field_id: string; reasoning_field_id: string
     } | null
-    const contactId = lead.highlevel_contact_id
 
-    if (matched?.highlevel_workflow_id && contactId) {
+    if (matched.highlevel_workflow_id && contactId) {
       const wf = await assignWorkflow(highlevelKey, contactId, matched.highlevel_workflow_id)
       if (wf.success) {
         await supabase.from('leads').update({ workflow_triggered: true, updated_at: new Date().toISOString() }).eq('id', leadId)
       }
     }
 
-    if (matched && contactId) {
+    if (contactId) {
       const isDefaultFallback = !result.persona_id && !!matched.is_default
-      await runPostEnrichmentHLActions({
-        apiKey: highlevelKey,
-        locationId,
-        contactId,
-        persona: matched,
-        reasoning,
-        isDefaultFallback,
-        fieldIds,
-      })
+      await runPostEnrichmentHLActions({ apiKey: highlevelKey, locationId, contactId, persona: matched, reasoning, isDefaultFallback, fieldIds })
     }
   }
 
   // Send email notifications
-  const matched = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
   if (postmarkKey && postmarkFrom && matched) {
     const personaEmails: string[] = matched.notification_emails || []
     const toEmails = Array.from(new Set([...globalEmails, ...personaEmails])).filter(Boolean)
@@ -283,7 +266,7 @@ async function enrichLead(accountId: string, leadId: string) {
         personaColor: matched.color,
         reasoning,
         isDefaultFallback,
-        pipeline: 'main',
+        pipeline,
       }).catch((e) => console.error('[Email] notification failed:', e))
     }
   }

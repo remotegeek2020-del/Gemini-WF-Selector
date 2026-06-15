@@ -64,6 +64,7 @@ export async function PUT(
     highlevel_stage_name,
     color,
     is_default,
+    notification_emails,
   } = body
 
   const { data: existingPersona } = await supabase
@@ -117,6 +118,7 @@ export async function PUT(
       highlevel_stage_name: highlevel_stage_name || null,
       color,
       is_default: is_default === true,
+      notification_emails: Array.isArray(notification_emails) ? notification_emails : [],
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.personaId)

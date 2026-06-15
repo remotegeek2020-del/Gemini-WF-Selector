@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
 import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
+import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
 
 export async function POST(
@@ -60,7 +61,7 @@ export async function POST(
       .from('api_keys')
       .select('service, key_value, extra_data')
       .eq('account_id', accountId)
-      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha'])
+      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'postmark'])
 
     if (keysError) throw new Error(`Failed to fetch API keys: ${keysError.message}`)
 
@@ -72,6 +73,15 @@ export async function POST(
     const highlevelKey = keyMap['highlevel']?.key_value
     const highlevelLocationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || null
     const lushaKey = keyMap['lusha']?.key_value || undefined
+    const postmarkKey = keyMap['postmark']?.key_value
+    const postmarkFrom = (keyMap['postmark']?.extra_data as Record<string, string> | null)?.from_email || ''
+
+    const { data: accountData } = await supabase
+      .from('accounts')
+      .select('notification_emails')
+      .eq('id', accountId)
+      .single()
+    const globalEmails: string[] = accountData?.notification_emails || []
 
     if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
 
@@ -166,6 +176,8 @@ export async function POST(
       (ed.current_company as string | undefined) ||
       (ed.lusha_company_name as string | undefined) ||
       undefined
+    const enrichedTitle = (ed.title as string | undefined) || (apolloRaw.title as string | undefined) || undefined
+    const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || undefined
 
     // Build lead update — always refresh enriched_data; also backfill
     // first_name/last_name/email/phone from Apollo if the lead arrived with blanks
@@ -231,6 +243,30 @@ export async function POST(
         } else {
           console.error('Failed to trigger workflow:', workflowResult.error)
         }
+      }
+    }
+
+    // Send email notifications
+    const matchedPersonaForEmail = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
+    if (postmarkKey && postmarkFrom && matchedPersonaForEmail) {
+      const personaEmails: string[] = matchedPersonaForEmail.notification_emails || []
+      const toEmails = Array.from(new Set([...globalEmails, ...personaEmails])).filter(Boolean)
+      if (toEmails.length > 0) {
+        const isDefaultFallback = !result.persona_id && !!matchedPersonaForEmail.is_default
+        sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
+          firstName: enrichedFirstName || lead.first_name || undefined,
+          lastName: enrichedLastName || lead.last_name || undefined,
+          email: enrichedEmail || lead.email || undefined,
+          phone: enrichedPhone || lead.phone || undefined,
+          company: enrichedCompany,
+          title: enrichedTitle,
+          linkedinUrl: enrichedLinkedin,
+          personaName: matchedPersonaForEmail.name,
+          personaColor: matchedPersonaForEmail.color,
+          reasoning,
+          isDefaultFallback,
+          pipeline: lead.pipeline || 'main',
+        }).catch((e) => console.error('[Email] notification failed:', e))
       }
     }
 

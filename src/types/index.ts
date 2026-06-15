@@ -3,8 +3,17 @@ export interface Account {
   name: string
   slug: string
   nurture_enabled: boolean
+  notification_emails: string[]
   created_at: string
   updated_at: string
+}
+
+export interface Pipeline {
+  id: string
+  account_id: string
+  name: string
+  slug: string
+  created_at: string
 }
 
 export interface UserRole {
@@ -59,7 +68,8 @@ export interface Persona {
   highlevel_stage_name: string | null
   color: string
   is_default: boolean
-  pipeline: 'main' | 'nurture'
+  pipeline: string
+  notification_emails: string[]
   created_at: string
   updated_at: string
 }
@@ -73,7 +83,7 @@ export interface Lead {
   email: string | null
   phone: string | null
   source: string | null
-  pipeline: 'main' | 'nurture'
+  pipeline: string
   raw_data: Record<string, unknown>
   enriched_data: Record<string, unknown> | null
   assigned_persona_id: string | null

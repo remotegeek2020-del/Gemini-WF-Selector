@@ -30,7 +30,7 @@ export async function GET(
       .eq('account_id', params.accountId),
     supabase
       .from('accounts')
-      .select('nurture_enabled, persona_gen_ai_enabled')
+      .select('nurture_enabled, persona_gen_ai_enabled, notification_emails')
       .eq('id', params.accountId)
       .single(),
   ])
@@ -41,6 +41,7 @@ export async function GET(
     apiKeys: keysResult.data || [],
     nurtureEnabled: accountResult.data?.nurture_enabled ?? false,
     personaGenAiEnabled: accountResult.data?.persona_gen_ai_enabled ?? false,
+    notificationEmails: accountResult.data?.notification_emails ?? [],
   })
 }
 
@@ -77,7 +78,7 @@ export async function POST(
     return NextResponse.json({ error: 'Service and key_value are required' }, { status: 400 })
   }
 
-  const validServices = ['ai_model', 'gemini', 'apollo', 'lusha', 'highlevel']
+  const validServices = ['ai_model', 'gemini', 'apollo', 'lusha', 'highlevel', 'postmark']
   if (!validServices.includes(service as string)) {
     return NextResponse.json(
       { error: `Invalid service. Must be one of: ${validServices.join(', ')}` },
@@ -135,6 +136,7 @@ export async function PATCH(
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (typeof body.nurture_enabled === 'boolean') updates.nurture_enabled = body.nurture_enabled
   if (typeof body.persona_gen_ai_enabled === 'boolean') updates.persona_gen_ai_enabled = body.persona_gen_ai_enabled
+  if (Array.isArray(body.notification_emails)) updates.notification_emails = body.notification_emails
 
   if (Object.keys(updates).length === 1) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

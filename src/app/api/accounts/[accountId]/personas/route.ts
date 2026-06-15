@@ -32,7 +32,7 @@ export async function GET(
     .eq('account_id', params.accountId)
     .order('created_at', { ascending: true })
 
-  if (pipeline === 'main' || pipeline === 'nurture') {
+  if (pipeline) {
     query = query.eq('pipeline', pipeline)
   }
 
@@ -105,13 +105,14 @@ export async function POST(
     color,
     is_default,
     pipeline,
+    notification_emails,
   } = body
 
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
 
-  const resolvedPipeline = pipeline === 'nurture' ? 'nurture' : 'main'
+  const resolvedPipeline = (pipeline as string) || 'main'
 
   if (is_default) {
     await supabase
@@ -158,6 +159,7 @@ export async function POST(
       color: color || '#6366f1',
       is_default: is_default === true,
       pipeline: resolvedPipeline,
+      notification_emails: Array.isArray(notification_emails) ? notification_emails : [],
     })
     .select()
     .single()

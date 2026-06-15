@@ -108,6 +108,21 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [aiModel, setAiModel] = useState<string>('gemini-1.5-flash')
   const [aiApiKey, setAiApiKey] = useState<string>('')
 
+  // Pipelines state
+  const [pipelinesList, setPipelinesList] = useState<{ id: string; name: string; slug: string }[]>([])
+  const [newPipelineName, setNewPipelineName] = useState('')
+  const [addingPipeline, setAddingPipeline] = useState(false)
+  const [renamingPipelineId, setRenamingPipelineId] = useState<string | null>(null)
+  const [renamePipelineValue, setRenamePipelineValue] = useState('')
+
+  // Postmark + global notification emails
+  const [postmarkKey, setPostmarkKey] = useState('')
+  const [postmarkFrom, setPostmarkFrom] = useState('')
+  const [savingPostmark, setSavingPostmark] = useState(false)
+  const [globalEmails, setGlobalEmails] = useState<string[]>([])
+  const [globalEmailInput, setGlobalEmailInput] = useState('')
+  const [savingGlobalEmails, setSavingGlobalEmails] = useState(false)
+
   useEffect(() => {
     setWebhookSecret(accountId.replace(/-/g, '').substring(0, 16))
 
@@ -121,6 +136,18 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         setExistingKeys(keys)
         setNurtureEnabled(data.nurtureEnabled ?? false)
         setPersonaGenAiEnabled(data.personaGenAiEnabled ?? false)
+        setGlobalEmails(data.notificationEmails ?? [])
+
+        const postmarkEntry = keys.find((k) => k.service === 'postmark')
+        if (postmarkEntry) {
+          setPostmarkKey(postmarkEntry.key_value || '')
+          setPostmarkFrom((postmarkEntry.extra_data as Record<string, string> | null)?.from_email || '')
+        }
+
+        fetch(`/api/accounts/${accountId}/pipelines`)
+          .then((r) => r.json())
+          .then((d) => setPipelinesList(d.pipelines || []))
+          .catch(() => {})
 
         // Check if agency AI persona gen is globally configured
         fetch('/api/agency/persona-gen-ai?accountId=' + accountId)
@@ -449,6 +476,207 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Pipelines */}
+      <Card className="mb-6">
+        <CardHeader><CardTitle>Pipelines</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">Manage lead routing pipelines. Each pipeline has its own personas and webhook URL (<code className="text-xs bg-gray-100 px-1 rounded">/api/webhook/{accountId}/[slug]</code>).</p>
+          <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+            {pipelinesList.map((pl) => (
+              <div key={pl.id} className="flex items-center justify-between px-4 py-3 bg-white">
+                {renamingPipelineId === pl.id ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      value={renamePipelineValue}
+                      onChange={(e) => setRenamePipelineValue(e.target.value)}
+                      className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      autoFocus
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!renamePipelineValue.trim()) return
+                        await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ name: renamePipelineValue.trim() }),
+                        })
+                        setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, name: renamePipelineValue.trim() } : p))
+                        setRenamingPipelineId(null)
+                      }}
+                      className="text-xs text-indigo-600 font-medium hover:underline"
+                    >Save</button>
+                    <button onClick={() => setRenamingPipelineId(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{pl.name}</p>
+                      <p className="text-xs text-gray-400 font-mono">slug: {pl.slug}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => { setRenamingPipelineId(pl.id); setRenamePipelineValue(pl.name) }} className="text-xs text-indigo-600 hover:underline">Rename</button>
+                      {pl.slug !== 'main' && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Delete pipeline "${pl.name}"? This cannot be undone.`)) return
+                            await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, { method: 'DELETE' })
+                            setPipelinesList((prev) => prev.filter((p) => p.id !== pl.id))
+                          }}
+                          className="text-xs text-red-500 hover:underline"
+                        >Delete</button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={newPipelineName}
+              onChange={(e) => setNewPipelineName(e.target.value)}
+              placeholder="New pipeline name…"
+              className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.form?.requestSubmit() }}
+            />
+            <Button
+              size="sm"
+              isLoading={addingPipeline}
+              onClick={async () => {
+                if (!newPipelineName.trim()) return
+                setAddingPipeline(true)
+                try {
+                  const res = await fetch(`/api/accounts/${accountId}/pipelines`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newPipelineName.trim() }),
+                  })
+                  const d = await res.json()
+                  if (d.pipeline) { setPipelinesList((prev) => [...prev, d.pipeline]); setNewPipelineName('') }
+                  else setError(d.error || 'Failed to create pipeline')
+                } finally {
+                  setAddingPipeline(false)
+                }
+              }}
+            >
+              Add Pipeline
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Notifications */}
+      <Card className="mb-6">
+        <CardHeader><CardTitle>Email Notifications</CardTitle></CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-gray-700">Postmark Settings</p>
+            <p className="text-xs text-gray-500">Used to send email alerts when leads are enriched and assigned.</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">API Key</label>
+                <input
+                  type="password"
+                  value={postmarkKey}
+                  onChange={(e) => setPostmarkKey(e.target.value)}
+                  placeholder="Postmark server API key"
+                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">From Email</label>
+                <input
+                  type="email"
+                  value={postmarkFrom}
+                  onChange={(e) => setPostmarkFrom(e.target.value)}
+                  placeholder="notifications@yourdomain.com"
+                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+            <Button
+              size="sm"
+              isLoading={savingPostmark}
+              onClick={async () => {
+                setSavingPostmark(true)
+                try {
+                  await fetch(`/api/accounts/${accountId}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service: 'postmark', key_value: postmarkKey, extra_data: { from_email: postmarkFrom } }),
+                  })
+                  setSuccess('Postmark settings saved')
+                } finally {
+                  setSavingPostmark(false)
+                }
+              }}
+            >
+              Save Postmark Settings
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-700">Global Notification Emails</p>
+            <p className="text-xs text-gray-500">These addresses receive an email on every enriched lead, regardless of persona.</p>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={globalEmailInput}
+                onChange={(e) => setGlobalEmailInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault()
+                    const em = globalEmailInput.trim()
+                    if (em && !globalEmails.includes(em)) setGlobalEmails((prev) => [...prev, em])
+                    setGlobalEmailInput('')
+                  }
+                }}
+                placeholder="email@example.com"
+                className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const em = globalEmailInput.trim()
+                  if (em && !globalEmails.includes(em)) setGlobalEmails((prev) => [...prev, em])
+                  setGlobalEmailInput('')
+                }}
+                className="px-3 py-2 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md hover:bg-indigo-100"
+              >Add</button>
+            </div>
+            {globalEmails.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {globalEmails.map((em) => (
+                  <span key={em} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                    {em}
+                    <button type="button" onClick={() => setGlobalEmails((prev) => prev.filter((e) => e !== em))} className="text-gray-400 hover:text-red-500">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <Button
+              size="sm"
+              isLoading={savingGlobalEmails}
+              onClick={async () => {
+                setSavingGlobalEmails(true)
+                try {
+                  await fetch(`/api/accounts/${accountId}/settings`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notification_emails: globalEmails }),
+                  })
+                  setSuccess('Notification emails saved')
+                } finally {
+                  setSavingGlobalEmails(false)
+                }
+              }}
+            >
+              Save Notification Emails
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
