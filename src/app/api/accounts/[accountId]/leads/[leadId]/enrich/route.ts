@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
 import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
 import { sendLeadNotification } from '@/lib/email/postmark'
@@ -76,12 +76,13 @@ export async function POST(
     const postmarkKey = keyMap['postmark']?.key_value
     const postmarkFrom = (keyMap['postmark']?.extra_data as Record<string, string> | null)?.from_email || ''
 
-    const { data: accountData } = await supabase
+    const { data: accountData } = await createAdminClient()
       .from('accounts')
       .select('notification_emails')
       .eq('id', accountId)
       .single()
     const globalEmails: string[] = accountData?.notification_emails || []
+    console.log('[Email] globalEmails from account:', globalEmails)
 
     if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
 
