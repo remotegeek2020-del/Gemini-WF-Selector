@@ -291,6 +291,9 @@ async function enrichLead(accountId: string, leadId: string) {
         reasoning,
         isDefaultFallback,
         pipeline: 'main',
+        source: lead.source || undefined,
+        rawData: lead.raw_data || undefined,
+        enrichedData: result.enriched_data || undefined,
       }).catch((e) => console.error('[Email] notification failed:', e))
     }
   }

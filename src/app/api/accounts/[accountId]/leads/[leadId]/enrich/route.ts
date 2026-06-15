@@ -266,6 +266,9 @@ export async function POST(
           reasoning,
           isDefaultFallback,
           pipeline: lead.pipeline || 'main',
+          source: lead.source || undefined,
+          rawData: lead.raw_data || undefined,
+          enrichedData: result.enriched_data || undefined,
         }).catch((e) => console.error('[Email] notification failed:', e))
       }
     }
