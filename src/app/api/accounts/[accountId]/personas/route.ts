@@ -106,6 +106,7 @@ export async function POST(
     is_default,
     pipeline,
     notification_emails,
+    opportunity_name_template,
   } = body
 
   if (!name) {
@@ -160,6 +161,7 @@ export async function POST(
       is_default: is_default === true,
       pipeline: resolvedPipeline,
       notification_emails: Array.isArray(notification_emails) ? notification_emails : [],
+      opportunity_name_template: (opportunity_name_template as string) || null,
     })
     .select()
     .single()

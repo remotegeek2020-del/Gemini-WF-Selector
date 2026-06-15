@@ -133,6 +133,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [notificationEmails, setNotificationEmails] = useState<string[]>([])
   const [notifEmailInput, setNotifEmailInput] = useState('')
+  const [opportunityNameTemplate, setOpportunityNameTemplate] = useState('')
 
   useEffect(() => {
     if (persona) {
@@ -168,10 +169,12 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       })
       setAvatarUrl(persona.avatar_url || null)
       setNotificationEmails(persona.notification_emails || [])
+      setOpportunityNameTemplate(persona.opportunity_name_template || '')
     } else {
       setForm(emptyForm)
       setAvatarUrl(null)
       setNotificationEmails([])
+      setOpportunityNameTemplate('')
     }
     setNotifEmailInput('')
     setErrors({})
@@ -256,6 +259,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         is_default: form.is_default,
         pipeline: persona?.pipeline ?? pipeline,
         notification_emails: notificationEmails,
+        opportunity_name_template: opportunityNameTemplate.trim() || null,
       })
       onClose()
     } catch (err) {
@@ -637,6 +641,26 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
                 </div>
               )}
               <p className="text-xs text-gray-400">When a lead matches this persona, an opportunity will be created in this pipeline stage.</p>
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Opportunity Name Template</label>
+                <input
+                  type="text"
+                  value={opportunityNameTemplate}
+                  onChange={(e) => setOpportunityNameTemplate(e.target.value)}
+                  placeholder="e.g. {{company}} — {{persona}}"
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Available tokens: <code className="bg-gray-100 px-1 rounded">{'{{persona}}'}</code>{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{{first_name}}'}</code>{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{{last_name}}'}</code>{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{{full_name}}'}</code>{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{{company}}'}</code>{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{{title}}'}</code>{' '}
+                  <code className="bg-gray-100 px-1 rounded">{'{{email}}'}</code>
+                  {' '}— leave blank to use &ldquo;{'{persona}'} Lead&rdquo;
+                </p>
+              </div>
             </div>
           )}
         </div>

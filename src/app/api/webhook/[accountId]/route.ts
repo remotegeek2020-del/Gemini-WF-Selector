@@ -260,6 +260,13 @@ async function enrichLead(accountId: string, leadId: string) {
         reasoning,
         isDefaultFallback,
         fieldIds,
+        leadData: {
+          firstName: enrichedFirstName || lead.first_name || undefined,
+          lastName: enrichedLastName || lead.last_name || undefined,
+          email: enrichedEmail || lead.email || undefined,
+          company: enrichedCompany,
+          title: enrichedTitle,
+        },
       })
     }
   }

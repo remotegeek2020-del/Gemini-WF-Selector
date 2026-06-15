@@ -244,7 +244,16 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
 
     if (contactId) {
       const isDefaultFallback = !result.persona_id && !!matched.is_default
-      await runPostEnrichmentHLActions({ apiKey: highlevelKey, locationId, contactId, persona: matched, reasoning, isDefaultFallback, fieldIds })
+      await runPostEnrichmentHLActions({
+        apiKey: highlevelKey, locationId, contactId, persona: matched, reasoning, isDefaultFallback, fieldIds,
+        leadData: {
+          firstName: enrichedFirstName || lead.first_name || undefined,
+          lastName: enrichedLastName || lead.last_name || undefined,
+          email: enrichedEmail || lead.email || undefined,
+          company: enrichedCompany,
+          title: enrichedTitle,
+        },
+      })
     }
   }
 

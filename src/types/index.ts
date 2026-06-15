@@ -70,6 +70,7 @@ export interface Persona {
   is_default: boolean
   pipeline: string
   notification_emails: string[]
+  opportunity_name_template: string | null
   created_at: string
   updated_at: string
 }
