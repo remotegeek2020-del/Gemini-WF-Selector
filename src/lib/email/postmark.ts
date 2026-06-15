@@ -89,13 +89,24 @@ export async function sendLeadNotification(
   // Attribution from HL webhook payload
   const attribution = extractAttribution(lead.rawData)
 
-  // Additional phone numbers from Lusha / Apollo
-  const lushaPhones = (ed.lusha_phone_numbers as { number?: string; type?: string }[] | undefined) || []
-  const apolloPhones = (ed.phone_numbers as { sanitized_number?: string; type?: string }[] | undefined) || []
-  const allPhones: string[] = []
-  for (const p of lushaPhones) { if (p.number) allPhones.push(`${p.number}${p.type ? ` (${p.type})` : ''}`) }
-  for (const p of apolloPhones) { if (p.sanitized_number && !allPhones.some((x) => x.startsWith(p.sanitized_number!))) allPhones.push(`${p.sanitized_number}${p.type ? ` (${p.type})` : ''}`) }
-  if (lead.phone && !allPhones.some((x) => x.startsWith(lead.phone!))) allPhones.unshift(lead.phone)
+  // Phone numbers — Lusha stores as lusha_phones (string[]), Apollo in apollo_raw.phone_numbers
+  const lushaPhones = (ed.lusha_phones as string[] | undefined) || []
+  const apolloPhones = (apolloRaw.phone_numbers as { sanitized_number?: string; type?: string }[] | undefined) || []
+  const allPhones: string[] = [...lushaPhones]
+  for (const p of apolloPhones) {
+    const num = p.sanitized_number
+    if (num && !allPhones.some((x) => x.includes(num.replace(/\D/g, '').slice(-7)))) {
+      allPhones.push(`${num}${p.type ? ` (${p.type})` : ''}`)
+    }
+  }
+  if (lead.phone && !allPhones.some((x) => x.includes(lead.phone!.replace(/\D/g, '').slice(-7)))) {
+    allPhones.unshift(lead.phone)
+  }
+
+  // Lusha emails (direct emails found by Lusha)
+  const lushaEmails = (ed.lusha_emails as string[] | undefined) || []
+  const lushaTitle = ed.lusha_current_title as string | undefined
+  const lushaCompany = ed.lusha_current_company as string | undefined
 
   // Employment history
   const employment = (ed.employment_history as { company?: string; title?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined) || []
@@ -123,15 +134,19 @@ export async function sendLeadNotification(
   const keywords = (org.keywords as string[] | undefined)?.slice(0, 8).join(', ')
 
   // Build HTML sections
+  const allEmails = Array.from(new Set([lead.email, ...lushaEmails].filter(Boolean))) as string[]
+  const effectiveTitle = lead.title || lushaTitle
+  const effectiveCompany = lead.company || lushaCompany
+
   const contactRows = [
     row('Name', name),
-    lead.email ? row('Email', lead.email, `mailto:${lead.email}`) : '',
+    allEmails.length ? row('Email', allEmails.map((e) => `<a href="mailto:${e}" style="color:#4f46e5;">${e}</a>`).join('<br>')) : '',
     allPhones.length ? row('Phone', allPhones.join('<br>')) : '',
-    lead.company ? row('Company', lead.company) : '',
-    lead.title ? row('Title', lead.title) : '',
+    effectiveCompany ? row('Company', effectiveCompany) : '',
+    effectiveTitle ? row('Title', effectiveTitle) : '',
     seniority ? row('Seniority', seniority) : '',
-    personLocation ? row('Location', personLocation as string) : '',
-    headline ? row('Headline', headline as string) : '',
+    personLocation ? row('Location', String(personLocation)) : '',
+    headline ? row('Headline', String(headline)) : '',
     lead.linkedinUrl ? row('LinkedIn', 'View Profile', lead.linkedinUrl) : '',
     twitterUrl ? row('Twitter', 'View Profile', twitterUrl) : '',
     githubUrl ? row('GitHub', 'View Profile', githubUrl) : '',
@@ -195,13 +210,15 @@ export async function sendLeadNotification(
     '',
     '--- CONTACT INFO ---',
     `Name: ${name}`,
-    lead.email ? `Email: ${lead.email}` : '',
+    allEmails.length ? `Email: ${allEmails.join(', ')}` : '',
     allPhones.length ? `Phone: ${allPhones.join(', ')}` : '',
-    lead.company ? `Company: ${lead.company}` : '',
-    lead.title ? `Title: ${lead.title}` : '',
+    effectiveCompany ? `Company: ${effectiveCompany}` : '',
+    effectiveTitle ? `Title: ${effectiveTitle}` : '',
     seniority ? `Seniority: ${seniority}` : '',
     personLocation ? `Location: ${personLocation}` : '',
+    headline ? `Headline: ${headline}` : '',
     lead.linkedinUrl ? `LinkedIn: ${lead.linkedinUrl}` : '',
+    twitterUrl ? `Twitter: ${twitterUrl}` : '',
     '',
     companyRows.trim() ? '--- COMPANY INTELLIGENCE ---' : '',
     industry ? `Industry: ${industry}` : '',
@@ -210,12 +227,16 @@ export async function sendLeadNotification(
     funding ? `Total Funding: ${funding}` : '',
     founded ? `Founded: ${founded}` : '',
     companyLocation ? `HQ: ${companyLocation}` : '',
+    keywords ? `Keywords: ${keywords}` : '',
     orgWebsite ? `Website: ${orgWebsite}` : '',
     '',
     employmentRows.trim() ? '--- EMPLOYMENT HISTORY ---' : '',
-    ...employment.map((e) => `${e.current ? '(Current) ' : ''}${e.title || '—'} @ ${e.company || '—'}`),
+    ...employment.map((e) => {
+      const dates = [e.start_date?.substring(0, 7), e.current ? 'Present' : e.end_date?.substring(0, 7)].filter(Boolean).join(' – ')
+      return `${e.current ? '(Current) ' : ''}${e.title || '—'} @ ${e.company || '—'}${dates ? ` [${dates}]` : ''}`
+    }),
     '',
-    attrRows.trim() ? '--- LEAD ATTRIBUTION ---' : '',
+    attrRows.trim() ? '--- LEAD ATTRIBUTION (HIGHLEVEL) ---' : '',
     ...Object.entries(attribution).map(([k, v]) => `${k}: ${v}`),
     '',
     '--- AI REASONING ---',
