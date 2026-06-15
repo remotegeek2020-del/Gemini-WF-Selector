@@ -20,52 +20,34 @@ function extractAttribution(rawData?: Record<string, unknown>): Record<string, s
   if (!rawData) return {}
   const attrs: Record<string, string> = {}
 
-  // Direct HL attribution fields
-  const directFields: [string, string][] = [
-    ['attributionSource', 'Source'],
-    ['source', 'Source'],
-    ['utmSource', 'UTM Source'],
-    ['utmMedium', 'UTM Medium'],
-    ['utmCampaign', 'UTM Campaign'],
-    ['utmContent', 'UTM Content'],
-    ['utmTerm', 'UTM Term'],
-    ['referrer', 'Referrer'],
-    ['gclid', 'Google Click ID'],
-    ['fbclid', 'Facebook Click ID'],
-  ]
-  for (const [key, label] of directFields) {
-    if (rawData[key] && typeof rawData[key] === 'string') {
-      attrs[label] = rawData[key] as string
-    }
-  }
+  // HL stores source as contact_source at top level
+  const contactSource = rawData.contact_source as string | undefined
+  if (contactSource) attrs['Lead Source'] = contactSource
 
-  // Nested attribution object (HL sometimes sends {attributionSource: {url, campaign, medium, source}})
-  const attrObj = rawData.attributionSource
-  if (attrObj && typeof attrObj === 'object' && !Array.isArray(attrObj)) {
-    const a = attrObj as Record<string, string>
-    if (a.url) attrs['Attribution URL'] = a.url
-    if (a.source) attrs['Source'] = a.source
-    if (a.medium) attrs['Medium'] = a.medium
-    if (a.campaign) attrs['Campaign'] = a.campaign
-  }
+  // Primary attribution is at contact.attributionSource
+  const contact = (rawData.contact || {}) as Record<string, unknown>
+  const first = (contact.attributionSource || {}) as Record<string, unknown>
+  const last = (contact.lastAttributionSource || {}) as Record<string, unknown>
 
-  // Scan customFields array for UTM/source related fields
-  const customFields = rawData.customFields
-  if (Array.isArray(customFields)) {
-    for (const field of customFields) {
-      const f = field as Record<string, string>
-      const key = (f.name || f.key || '').toLowerCase()
-      const val = f.value || f.fieldValue || ''
-      if (!val) continue
-      if (key.includes('utm_source') || key.includes('utm source')) attrs['UTM Source'] = val
-      else if (key.includes('utm_medium') || key.includes('utm medium')) attrs['UTM Medium'] = val
-      else if (key.includes('utm_campaign') || key.includes('utm campaign')) attrs['UTM Campaign'] = val
-      else if (key.includes('utm_content') || key.includes('utm content')) attrs['UTM Content'] = val
-      else if (key.includes('utm_term') || key.includes('utm term')) attrs['UTM Term'] = val
-      else if (key.includes('referrer') || key.includes('referring')) attrs['Referrer'] = val
-      else if (key.includes('source') && !attrs['Source']) attrs['Source'] = val
-    }
-  }
+  if (first.sessionSource) attrs['Session Source'] = String(first.sessionSource)
+  if (first.medium) attrs['Medium'] = String(first.medium)
+  if (first.formName) attrs['Ad/Form Name'] = String(first.formName)
+  if (first.adAccountId) attrs['Ad Account ID'] = String(first.adAccountId)
+  if (first.url) attrs['Attribution URL'] = String(first.url)
+  if (first.utmSource) attrs['UTM Source'] = String(first.utmSource)
+  if (first.utmMedium) attrs['UTM Medium'] = String(first.utmMedium)
+  if (first.utmCampaign) attrs['UTM Campaign'] = String(first.utmCampaign)
+  if (first.utmContent) attrs['UTM Content'] = String(first.utmContent)
+  if (first.gclid) attrs['Google Click ID'] = String(first.gclid)
+
+  // Last attribution (most recent touch)
+  if (last.sessionSource && last.sessionSource !== first.sessionSource) attrs['Last Session Source'] = String(last.sessionSource)
+  if (last.url) attrs['Last URL'] = String(last.url)
+  if (last.utmSource) attrs['Last UTM Source'] = String(last.utmSource)
+  if (last.utmMedium) attrs['Last UTM Medium'] = String(last.utmMedium)
+  if (last.utmCampaign) attrs['Last UTM Campaign'] = String(last.utmCampaign)
+  if (last.referrer) attrs['Referrer'] = String(last.referrer)
+  if (last.gclid && !attrs['Google Click ID']) attrs['Google Click ID'] = String(last.gclid)
 
   return attrs
 }
