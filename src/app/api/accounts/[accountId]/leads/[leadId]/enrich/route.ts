@@ -248,10 +248,19 @@ export async function POST(
 
     // Send email notifications
     const matchedPersonaForEmail = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
-    if (postmarkKey && postmarkFrom && matchedPersonaForEmail) {
+    if (!postmarkKey) {
+      console.warn('[Email] skipped — postmark API key not configured')
+    } else if (!postmarkFrom) {
+      console.warn('[Email] skipped — postmark from_email not configured')
+    } else if (!matchedPersonaForEmail) {
+      console.warn('[Email] skipped — no matched persona (status:', finalStatus, ')')
+    } else {
       const personaEmails: string[] = matchedPersonaForEmail.notification_emails || []
       const toEmails = Array.from(new Set([...globalEmails, ...personaEmails])).filter(Boolean)
-      if (toEmails.length > 0) {
+      if (toEmails.length === 0) {
+        console.warn('[Email] skipped — no recipient emails configured (global:', globalEmails.length, 'persona:', personaEmails.length, ')')
+      } else {
+        console.log('[Email] sending to:', toEmails)
         const isDefaultFallback = !result.persona_id && !!matchedPersonaForEmail.is_default
         sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
           firstName: enrichedFirstName || lead.first_name || undefined,

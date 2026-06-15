@@ -240,7 +240,7 @@ export async function sendLeadNotification(
     lead.reasoning,
   ].filter((l) => l !== null && l !== undefined).join('\n')
 
-  await fetch('https://api.postmarkapp.com/email', {
+  const res = await fetch('https://api.postmarkapp.com/email', {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -256,4 +256,9 @@ export async function sendLeadNotification(
       MessageStream: 'outbound',
     }),
   })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Postmark API error ${res.status}: ${body}`)
+  }
 }
