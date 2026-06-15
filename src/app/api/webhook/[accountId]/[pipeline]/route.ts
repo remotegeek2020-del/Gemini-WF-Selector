@@ -127,7 +127,10 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
   const highlevelKey = keyMap['highlevel']?.key_value
   const lushaKey = keyMap['lusha']?.key_value || undefined
   const postmarkKey = keyMap['postmark']?.key_value
-  const postmarkFrom = (keyMap['postmark']?.extra_data as Record<string, string> | null)?.from_email || ''
+  const postmarkExtra = keyMap['postmark']?.extra_data as Record<string, string> | null
+  const postmarkFromEmail = postmarkExtra?.from_email || ''
+  const postmarkFromName = postmarkExtra?.from_name || ''
+  const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
   const globalEmails: string[] = accountResult.data?.notification_emails || []
 
   if (!apolloKey) {

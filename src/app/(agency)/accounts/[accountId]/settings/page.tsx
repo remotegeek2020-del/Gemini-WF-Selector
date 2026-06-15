@@ -118,6 +118,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   // Postmark + global notification emails
   const [postmarkKey, setPostmarkKey] = useState('')
   const [postmarkFrom, setPostmarkFrom] = useState('')
+  const [postmarkFromName, setPostmarkFromName] = useState('')
   const [savingPostmark, setSavingPostmark] = useState(false)
   const [globalEmails, setGlobalEmails] = useState<string[]>([])
   const [globalEmailInput, setGlobalEmailInput] = useState('')
@@ -144,6 +145,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         if (postmarkEntry) {
           setPostmarkKey(postmarkEntry.key_value || '')
           setPostmarkFrom((postmarkEntry.extra_data as Record<string, string> | null)?.from_email || '')
+          setPostmarkFromName((postmarkEntry.extra_data as Record<string, string> | null)?.from_name || '')
         }
 
         fetch(`/api/accounts/${accountId}/pipelines`)
@@ -589,6 +591,16 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                 />
               </div>
               <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Sender Name</label>
+                <input
+                  type="text"
+                  value={postmarkFromName}
+                  onChange={(e) => setPostmarkFromName(e.target.value)}
+                  placeholder="e.g. Lead Router"
+                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">From Email</label>
                 <input
                   type="email"
@@ -597,6 +609,9 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                   placeholder="notifications@yourdomain.com"
                   className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+                {postmarkFromName && postmarkFrom && (
+                  <p className="text-xs text-gray-400 mt-1">Emails will show from: <strong>{postmarkFromName} &lt;{postmarkFrom}&gt;</strong></p>
+                )}
               </div>
             </div>
             <Button
@@ -608,7 +623,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                   await fetch(`/api/accounts/${accountId}/settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ service: 'postmark', key_value: postmarkKey, extra_data: { from_email: postmarkFrom } }),
+                    body: JSON.stringify({ service: 'postmark', key_value: postmarkKey, extra_data: { from_email: postmarkFrom, from_name: postmarkFromName } }),
                   })
                   setSuccess('Postmark settings saved')
                 } finally {

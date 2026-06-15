@@ -38,13 +38,16 @@ export async function POST(
   ])
 
   const postmarkKey = keysResult.data?.key_value
-  const postmarkFrom = (keysResult.data?.extra_data as Record<string, string> | null)?.from_email
+  const postmarkExtra = keysResult.data?.extra_data as Record<string, string> | null
+  const postmarkFromEmail = postmarkExtra?.from_email
+  const postmarkFromName = postmarkExtra?.from_name || ''
+  const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
   const globalEmails: string[] = accountResult.data?.notification_emails || []
 
   if (!postmarkKey) {
     return NextResponse.json({ error: 'Postmark API key not configured' }, { status: 400 })
   }
-  if (!postmarkFrom) {
+  if (!postmarkFromEmail) {
     return NextResponse.json({ error: 'Postmark From Email not configured' }, { status: 400 })
   }
   if (globalEmails.length === 0) {
