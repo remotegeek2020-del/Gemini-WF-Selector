@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
@@ -157,10 +157,17 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
     .eq('pipeline', pipeline)
     .order('created_at', { ascending: true })
 
+  const hlLinkedinUrl = extractLinkedinFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
+
   const result = await runEnrichmentAgent(aiConfig, apolloKey, {
     firstName: lead.first_name, lastName: lead.last_name, email: lead.email,
-    phone: lead.phone, source: lead.source, rawData: lead.raw_data,
+    phone: lead.phone, source: lead.source, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data,
   }, personas || [], lushaKey)
+
+  if (hlLinkedinUrl && result.enriched_data && !(result.enriched_data as Record<string, unknown>).linkedin_url) {
+    ;(result.enriched_data as Record<string, unknown>).linkedin_url = hlLinkedinUrl
+    ;(result.enriched_data as Record<string, unknown>).hl_linkedin_url = hlLinkedinUrl
+  }
 
   let assignedPersonaId = result.persona_id
   let reasoning = result.reasoning
@@ -187,7 +194,7 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
   const org = (apolloRaw.organization || ed.organization) as Record<string, unknown> | undefined
   const enrichedCompany = (ed.current_company as string) || (org?.name as string) || undefined
   const enrichedTitle = (ed.title as string) || (apolloRaw.title as string) || undefined
-  const enrichedLinkedin = (ed.linkedin_url as string) || (apolloRaw.linkedin_url as string) || undefined
+  const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || (ed.hl_linkedin_url as string | undefined) || undefined
 
   const leadUpdate: Record<string, unknown> = {
     enriched_data: result.enriched_data,

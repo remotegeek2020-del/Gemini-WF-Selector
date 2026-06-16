@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
@@ -159,10 +159,17 @@ async function enrichLead(accountId: string, leadId: string) {
 
   const { data: personas } = await supabase.from('personas').select('*').eq('account_id', accountId).eq('pipeline', 'main').order('created_at', { ascending: true })
 
+  const hlLinkedinUrl = extractLinkedinFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
+
   const result = await runEnrichmentAgent(aiConfig, apolloKey, {
     firstName: lead.first_name, lastName: lead.last_name, email: lead.email,
-    phone: lead.phone, source: lead.source, rawData: lead.raw_data,
+    phone: lead.phone, source: lead.source, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data,
   }, personas || [], lushaKey)
+
+  if (hlLinkedinUrl && result.enriched_data && !(result.enriched_data as Record<string, unknown>).linkedin_url) {
+    ;(result.enriched_data as Record<string, unknown>).linkedin_url = hlLinkedinUrl
+    ;(result.enriched_data as Record<string, unknown>).hl_linkedin_url = hlLinkedinUrl
+  }
 
   let assignedPersonaId = result.persona_id
   let reasoning = result.reasoning
@@ -190,7 +197,7 @@ async function enrichLead(accountId: string, leadId: string) {
   const org = (apolloRaw.organization || ed.organization) as Record<string, unknown> | undefined
   const enrichedCompany = (ed.current_company as string | undefined) || (org?.name as string | undefined) || undefined
   const enrichedTitle = (ed.title as string | undefined) || (apolloRaw.title as string | undefined) || undefined
-  const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || undefined
+  const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || (ed.hl_linkedin_url as string | undefined) || undefined
 
   // Build lead update — backfill name/email/phone if the lead arrived with blanks
   const leadUpdate: Record<string, unknown> = {

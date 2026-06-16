@@ -78,7 +78,7 @@ export async function runAnthropicAgent(
           lastName: args.last_name || lead.lastName || undefined,
           organizationName: args.organization_name || undefined,
           domain: args.domain || undefined,
-          linkedinUrl: args.linkedin_url || undefined,
+          linkedinUrl: args.linkedin_url || lead.linkedinUrl || undefined,
         })
 
         const formattedData = formatApolloDataForGemini(apolloResult.person)

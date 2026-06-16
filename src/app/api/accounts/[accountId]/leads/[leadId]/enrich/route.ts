@@ -4,7 +4,7 @@ export const maxDuration = 60
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow, updateContactProfile, lookupContactByEmail } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload } from '@/lib/highlevel/client'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
 
@@ -126,6 +126,8 @@ export async function POST(
 
     if (personasError) throw new Error(`Failed to fetch personas: ${personasError.message}`)
 
+    const hlLinkedinUrl = extractLinkedinFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
+
     // Run enrichment agent with the selected provider
     const result = await runEnrichmentAgent(
       aiConfig,
@@ -136,11 +138,17 @@ export async function POST(
         email: lead.email,
         phone: lead.phone,
         source: lead.source,
+        linkedinUrl: hlLinkedinUrl,
         rawData: lead.raw_data,
       },
       personas || [],
       lushaKey
     )
+
+    if (hlLinkedinUrl && result.enriched_data && !(result.enriched_data as Record<string, unknown>).linkedin_url) {
+      ;(result.enriched_data as Record<string, unknown>).linkedin_url = hlLinkedinUrl
+      ;(result.enriched_data as Record<string, unknown>).hl_linkedin_url = hlLinkedinUrl
+    }
 
     let assignedPersonaId = result.persona_id
     let reasoning = result.reasoning
@@ -172,7 +180,7 @@ export async function POST(
       (apolloRaw.email as string | undefined) ||
       undefined
     const enrichedPhone =
-      (ed.lusha_phone_numbers as { number?: string }[] | undefined)?.[0]?.number ||
+      (ed.lusha_phones as string[] | undefined)?.[0] ||
       (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
       undefined
     const enrichedCompany =
@@ -181,7 +189,7 @@ export async function POST(
       (ed.lusha_company_name as string | undefined) ||
       undefined
     const enrichedTitle = (ed.title as string | undefined) || (apolloRaw.title as string | undefined) || undefined
-    const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || undefined
+    const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || (ed.hl_linkedin_url as string | undefined) || undefined
 
     // Build lead update — always refresh enriched_data; also backfill
     // first_name/last_name/email/phone from Apollo if the lead arrived with blanks

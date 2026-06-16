@@ -6,6 +6,7 @@ export interface LeadData {
   email?: string | null
   phone?: string | null
   source?: string | null
+  linkedinUrl?: string | null
   rawData?: Record<string, unknown>
 }
 

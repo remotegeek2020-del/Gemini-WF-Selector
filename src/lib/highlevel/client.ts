@@ -161,6 +161,34 @@ export async function updateContactProfile(
   if (!res.ok) throw new Error(`HL update contact profile ${res.status}: ${await res.text()}`)
 }
 
+// ── LinkedIn extraction ───────────────────────────────────────────────────────
+
+export function extractLinkedinFromHLPayload(body: Record<string, unknown>): string | undefined {
+  const flatKeys = [
+    'Linkedin Profile Link',
+    'LinkedIn Profile Link',
+    'linkedin_profile_link',
+    'linkedinUrl',
+    'linkedin_url',
+    'linkedInUrl',
+  ]
+  for (const key of flatKeys) {
+    const val = body[key]
+    if (typeof val === 'string' && val.trim()) return val.trim()
+  }
+  const customFields = body.customFields as Record<string, unknown>[] | undefined
+  if (Array.isArray(customFields)) {
+    for (const field of customFields) {
+      const key = String(field.key || field.fieldKey || '').toLowerCase()
+      const value = String(field.value || field.fieldValue || '').trim()
+      if (value && (key === 'contact.linkedin_profile_link' || key.includes('linkedin'))) {
+        return value
+      }
+    }
+  }
+  return undefined
+}
+
 // ── Pipelines ─────────────────────────────────────────────────────────────────
 
 export interface HLPipelineStage {
