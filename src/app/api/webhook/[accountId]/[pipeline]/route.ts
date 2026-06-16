@@ -255,6 +255,7 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
           email: enrichedEmail || lead.email || undefined,
           company: enrichedCompany,
           title: enrichedTitle,
+          source: lead.source || undefined,
         },
       })
     }
