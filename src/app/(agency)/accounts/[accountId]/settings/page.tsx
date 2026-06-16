@@ -126,6 +126,14 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [testingEmail, setTestingEmail] = useState(false)
   const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null)
 
+  // Bulk persona email state
+  const [personasList, setPersonasList] = useState<{ id: string; name: string; notification_emails: string[] }[]>([])
+  const [selectedPersonaIds, setSelectedPersonaIds] = useState<Set<string>>(new Set())
+  const [bulkEmailInput, setBulkEmailInput] = useState('')
+  const [bulkEmails, setBulkEmails] = useState<string[]>([])
+  const [applyingBulk, setApplyingBulk] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ ok: boolean; message: string } | null>(null)
+
   useEffect(() => {
     setWebhookSecret(accountId.replace(/-/g, '').substring(0, 16))
 
@@ -151,6 +159,11 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         fetch(`/api/accounts/${accountId}/pipelines`)
           .then((r) => r.json())
           .then((d) => setPipelinesList(d.pipelines || []))
+          .catch(() => {})
+
+        fetch(`/api/accounts/${accountId}/personas`)
+          .then((r) => r.json())
+          .then((d) => setPersonasList(d.personas || []))
           .catch(() => {})
 
         // Check if agency AI persona gen is globally configured
@@ -724,6 +737,121 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
               </p>
             )}
           </div>
+
+          {/* Bulk persona email assignment */}
+          {personasList.length > 0 && (
+            <div className="space-y-3 border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700">Bulk Persona Notification Emails</p>
+              <p className="text-xs text-gray-500">Select personas and add emails to all of them at once.</p>
+
+              {/* Persona list */}
+              <div className="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-56 overflow-y-auto">
+                <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100">
+                  <input
+                    type="checkbox"
+                    checked={selectedPersonaIds.size === personasList.length && personasList.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedPersonaIds(new Set(personasList.map((p) => p.id)))
+                      else setSelectedPersonaIds(new Set())
+                    }}
+                    className="rounded"
+                  />
+                  <span className="text-xs font-semibold text-gray-600">Select All ({personasList.length})</span>
+                </label>
+                {personasList.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedPersonaIds.has(p.id)}
+                      onChange={(e) => {
+                        setSelectedPersonaIds((prev) => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(p.id)
+                          else next.delete(p.id)
+                          return next
+                        })
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-xs text-gray-700 flex-1">{p.name}</span>
+                    {p.notification_emails?.length > 0 && (
+                      <span className="text-xs text-indigo-500">{p.notification_emails.length} email{p.notification_emails.length > 1 ? 's' : ''}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+
+              {/* Email input */}
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={bulkEmailInput}
+                  onChange={(e) => setBulkEmailInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault()
+                      const em = bulkEmailInput.trim()
+                      if (em && !bulkEmails.includes(em)) setBulkEmails((prev) => [...prev, em])
+                      setBulkEmailInput('')
+                    }
+                  }}
+                  placeholder="email@example.com"
+                  className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button type="button" onClick={() => {
+                  const em = bulkEmailInput.trim()
+                  if (em && !bulkEmails.includes(em)) setBulkEmails((prev) => [...prev, em])
+                  setBulkEmailInput('')
+                }} className="px-3 py-2 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md hover:bg-indigo-100">Add</button>
+              </div>
+              {bulkEmails.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {bulkEmails.map((em) => (
+                    <span key={em} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
+                      {em}
+                      <button type="button" onClick={() => setBulkEmails((prev) => prev.filter((e) => e !== em))} className="text-gray-400 hover:text-red-500">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                isLoading={applyingBulk}
+                disabled={selectedPersonaIds.size === 0 || bulkEmails.length === 0}
+                onClick={async () => {
+                  setApplyingBulk(true)
+                  setBulkResult(null)
+                  try {
+                    const selected = personasList.filter((p) => selectedPersonaIds.has(p.id))
+                    await Promise.all(selected.map((p) => {
+                      const merged = Array.from(new Set([...(p.notification_emails || []), ...bulkEmails]))
+                      return fetch(`/api/accounts/${accountId}/personas/${p.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...p, notification_emails: merged }),
+                      })
+                    }))
+                    // Refresh personas list
+                    const refreshed = await fetch(`/api/accounts/${accountId}/personas`).then((r) => r.json())
+                    setPersonasList(refreshed.personas || [])
+                    setSelectedPersonaIds(new Set())
+                    setBulkEmails([])
+                    setBulkResult({ ok: true, message: `Emails added to ${selected.length} persona${selected.length > 1 ? 's' : ''}` })
+                  } catch (e) {
+                    setBulkResult({ ok: false, message: e instanceof Error ? e.message : 'Failed' })
+                  } finally {
+                    setApplyingBulk(false)
+                  }
+                }}
+              >
+                Apply to {selectedPersonaIds.size > 0 ? `${selectedPersonaIds.size} Selected` : 'Selected'} Persona{selectedPersonaIds.size !== 1 ? 's' : ''}
+              </Button>
+              {bulkResult && (
+                <p className={`text-xs ${bulkResult.ok ? 'text-green-600' : 'text-red-600'}`}>{bulkResult.message}</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
