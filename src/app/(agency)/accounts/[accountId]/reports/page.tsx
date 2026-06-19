@@ -33,12 +33,13 @@ function StatCard({ title, value, color }: StatCardProps) {
 
 function exportLeadsCSV(leads: Lead[], personaName?: string) {
   const rows = [
-    ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Title', 'Persona', 'Status', 'Source', 'Created'],
+    ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Title', 'LinkedIn Profile', 'Persona', 'Status', 'Source', 'Created'],
     ...leads.map((lead) => {
       const ed = (lead.enriched_data || {}) as Record<string, unknown>
       const apolloRaw = (ed.apollo_raw || {}) as Record<string, unknown>
       const company = (ed.current_company as string) || (apolloRaw.organization as Record<string,string> | undefined)?.name || ''
       const title = (ed.title as string) || (apolloRaw.title as string) || ''
+      const linkedin = (ed.linkedin_url as string) || (apolloRaw.linkedin_url as string) || (ed.hl_linkedin_url as string) || ''
       return [
         lead.first_name || '',
         lead.last_name || '',
@@ -46,6 +47,7 @@ function exportLeadsCSV(leads: Lead[], personaName?: string) {
         lead.phone || '',
         company,
         title,
+        linkedin,
         lead.personas?.name || '',
         lead.status,
         lead.source || '',
