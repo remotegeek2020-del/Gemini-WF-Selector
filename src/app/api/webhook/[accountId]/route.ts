@@ -289,23 +289,27 @@ async function enrichLead(accountId: string, leadId: string) {
     const toEmails = Array.from(new Set([...globalEmails, ...personaEmails])).filter(Boolean)
     if (toEmails.length > 0) {
       const isDefaultFallback = !result.persona_id && !!matched.is_default
-      sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
-        firstName: enrichedFirstName || lead.first_name || undefined,
-        lastName: enrichedLastName || lead.last_name || undefined,
-        email: enrichedEmail || lead.email || undefined,
-        phone: enrichedPhone || lead.phone || undefined,
-        company: enrichedCompany,
-        title: enrichedTitle,
-        linkedinUrl: enrichedLinkedin,
-        personaName: matched.name,
-        personaColor: matched.color,
-        reasoning,
-        isDefaultFallback,
-        pipeline: 'main',
-        source: lead.source || undefined,
-        rawData: lead.raw_data || undefined,
-        enrichedData: result.enriched_data || undefined,
-      }).catch((e) => console.error('[Email] notification failed:', e))
+      try {
+        await sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
+          firstName: enrichedFirstName || lead.first_name || undefined,
+          lastName: enrichedLastName || lead.last_name || undefined,
+          email: enrichedEmail || lead.email || undefined,
+          phone: enrichedPhone || lead.phone || undefined,
+          company: enrichedCompany,
+          title: enrichedTitle,
+          linkedinUrl: enrichedLinkedin,
+          personaName: matched.name,
+          personaColor: matched.color,
+          reasoning,
+          isDefaultFallback,
+          pipeline: 'main',
+          source: lead.source || undefined,
+          rawData: lead.raw_data || undefined,
+          enrichedData: result.enriched_data || undefined,
+        })
+      } catch (e) {
+        console.error('[Email] notification failed:', e)
+      }
     }
   }
 }

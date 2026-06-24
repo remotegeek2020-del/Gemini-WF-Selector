@@ -274,23 +274,27 @@ export async function POST(
       } else {
         console.log('[Email] sending to:', toEmails)
         const isDefaultFallback = !result.persona_id && !!matchedPersonaForEmail.is_default
-        sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
-          firstName: enrichedFirstName || lead.first_name || undefined,
-          lastName: enrichedLastName || lead.last_name || undefined,
-          email: enrichedEmail || lead.email || undefined,
-          phone: enrichedPhone || lead.phone || undefined,
-          company: enrichedCompany,
-          title: enrichedTitle,
-          linkedinUrl: enrichedLinkedin,
-          personaName: matchedPersonaForEmail.name,
-          personaColor: matchedPersonaForEmail.color,
-          reasoning,
-          isDefaultFallback,
-          pipeline: lead.pipeline || 'main',
-          source: lead.source || undefined,
-          rawData: lead.raw_data || undefined,
-          enrichedData: result.enriched_data || undefined,
-        }).catch((e) => console.error('[Email] notification failed:', e))
+        try {
+          await sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
+            firstName: enrichedFirstName || lead.first_name || undefined,
+            lastName: enrichedLastName || lead.last_name || undefined,
+            email: enrichedEmail || lead.email || undefined,
+            phone: enrichedPhone || lead.phone || undefined,
+            company: enrichedCompany,
+            title: enrichedTitle,
+            linkedinUrl: enrichedLinkedin,
+            personaName: matchedPersonaForEmail.name,
+            personaColor: matchedPersonaForEmail.color,
+            reasoning,
+            isDefaultFallback,
+            pipeline: lead.pipeline || 'main',
+            source: lead.source || undefined,
+            rawData: lead.raw_data || undefined,
+            enrichedData: result.enriched_data || undefined,
+          })
+        } catch (e) {
+          console.error('[Email] notification failed:', e)
+        }
       }
     }
 
