@@ -283,11 +283,11 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
     }
   }
 
-  // Send email notifications — pipeline emails + persona-specific emails
+  // Send email notifications — persona emails take priority; pipeline emails are the fallback
   const matched = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
   if (postmarkKey && postmarkFrom && matched) {
-    const personaEmails: string[] = matched.notification_emails || []
-    const toEmails = Array.from(new Set([...pipelineEmails, ...personaEmails])).filter(Boolean)
+    const personaEmails: string[] = (matched.notification_emails || []).filter(Boolean)
+    const toEmails = personaEmails.length > 0 ? personaEmails : pipelineEmails.filter(Boolean)
     if (toEmails.length > 0) {
       const isDefaultFallback = !result.persona_id && !!matched.is_default
       try {
