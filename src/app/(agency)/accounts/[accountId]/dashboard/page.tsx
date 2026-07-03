@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import type { Lead } from '@/types'
+import type { Lead, Pipeline } from '@/types'
 import LeadsTable from '@/components/leads-table'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,13 +12,22 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [activePipeline, setActivePipeline] = useState<string>('main')
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/accounts/${accountId}/pipelines`)
+      .then((r) => r.json())
+      .then((d) => { if (d.pipelines?.length) setPipelines(d.pipelines) })
+      .catch(() => {})
+  }, [accountId])
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ limit: '100' })
+      const params = new URLSearchParams({ limit: '100', pipeline: activePipeline })
       if (statusFilter) params.set('status', statusFilter)
 
       const res = await fetch(`/api/accounts/${accountId}/leads?${params}`)
@@ -31,7 +40,7 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
     } finally {
       setIsLoading(false)
     }
-  }, [accountId, statusFilter])
+  }, [accountId, statusFilter, activePipeline])
 
   useEffect(() => {
     fetchLeads()
@@ -94,6 +103,17 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {pipelines.length > 1 && (
+            <select
+              value={activePipeline}
+              onChange={(e) => setActivePipeline(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.slug}>{p.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
