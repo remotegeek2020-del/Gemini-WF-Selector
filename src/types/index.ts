@@ -1,3 +1,33 @@
+export interface PersonaLibraryEntry {
+  id: string
+  name: string
+  category: string
+  color: string
+  description?: string | null
+  full_name?: string | null
+  title_role?: string | null
+  age?: string | null
+  location?: string | null
+  current_income?: string | null
+  income_goal?: string | null
+  background_story?: string | null
+  core_frustration?: string | null
+  who_they_are?: string | null
+  industry_experience?: string | null
+  primary_frustration?: string | null
+  what_they_want?: string | null
+  decision_trigger?: string | null
+  trust_barrier?: string | null
+  engagement_style?: string | null
+  best_contact_method?: string | null
+  sells_into?: string | null
+  characteristics?: string | null
+  state?: string | null
+  county?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Account {
   id: string
   name: string

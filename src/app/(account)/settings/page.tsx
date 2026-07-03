@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import type { AIProvider } from '@/types'
+import type { AIProvider, Pipeline } from '@/types'
 
 interface ApiKeyEntry {
   id: string
@@ -92,6 +92,7 @@ export default function SubAccountSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [nurtureEnabled, setNurtureEnabled] = useState(false)
+  const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [formValues, setFormValues] = useState<
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
@@ -127,6 +128,12 @@ export default function SubAccountSettingsPage() {
         const keys: ApiKeyEntry[] = data.apiKeys || []
         setExistingKeys(keys)
         setNurtureEnabled(data.nurtureEnabled ?? false)
+
+        // Fetch pipelines
+        fetch(`/api/accounts/${accountId}/pipelines`)
+          .then((r) => r.json())
+          .then((d) => setPipelines(d.pipelines || []))
+          .catch(console.error)
 
         // Pre-populate AI model settings if they exist
         const aiModelEntry = keys.find((k) => k.service === 'ai_model')
@@ -385,6 +392,43 @@ export default function SubAccountSettingsPage() {
                     ? `${window.location.origin}/api/webhook/${accountId}/nurture?secret=${accountId.replace(/-/g, '').substring(0, 16)}`
                     : ''}
                 </code>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Webhook URLs */}
+          {accountId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Webhook URLs</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-gray-500">
+                  Use these URLs in your ad platforms and CRM to send leads for enrichment. Each pipeline has its own URL so personas and routing stay separate.
+                </p>
+                <div className="space-y-2">
+                  {/* Main pipeline always shown */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1">Main (LinkedIn / Default)</p>
+                    <code className="block bg-gray-50 border border-gray-200 px-3 py-2 rounded text-xs text-gray-700 font-mono break-all">
+                      {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${accountId}` : ''}
+                    </code>
+                  </div>
+                  {/* Additional pipelines */}
+                  {pipelines.filter((p) => p.slug !== 'main').map((p) => (
+                    <div key={p.slug}>
+                      <p className="text-xs font-medium text-gray-500 mb-1">{p.name}</p>
+                      <code className="block bg-gray-50 border border-gray-200 px-3 py-2 rounded text-xs text-gray-700 font-mono break-all">
+                        {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${accountId}/${p.slug}` : ''}
+                      </code>
+                    </div>
+                  ))}
+                  {pipelines.filter((p) => p.slug !== 'main').length === 0 && (
+                    <p className="text-xs text-gray-400 italic">
+                      Additional pipelines (Facebook, Google, etc.) will appear here once created by your agency.
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { Persona, Pipeline } from '@/types'
 import PersonaForm from '@/components/persona-form'
+import PersonaLibraryModal from '@/components/persona-library-modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 
@@ -16,6 +17,7 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false)
 
   useEffect(() => {
     fetch(`/api/accounts/${accountId}/pipelines`)
@@ -110,12 +112,23 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
             Define personas to classify and route incoming leads
           </p>
         </div>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Persona
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsLibraryOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+            </svg>
+            Import from Library
+          </button>
+          <Button onClick={() => setIsFormOpen(true)}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Persona
+          </Button>
+        </div>
       </div>
 
       {/* Pipeline tabs */}
@@ -278,6 +291,16 @@ export default function AccountPersonasPage({ params }: { params: { accountId: s
         accountId={accountId}
         pipeline={activePipeline}
       />
+
+      {isLibraryOpen && (
+        <PersonaLibraryModal
+          accountId={accountId}
+          pipelines={pipelines}
+          currentPipeline={activePipeline}
+          onClose={() => setIsLibraryOpen(false)}
+          onImported={() => fetchPersonas(activePipeline)}
+        />
+      )}
     </div>
   )
 }
