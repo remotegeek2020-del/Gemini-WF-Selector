@@ -22,33 +22,34 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { libraryId, pipeline } = await request.json()
-  if (!libraryId || !pipeline) {
-    return NextResponse.json({ error: 'libraryId and pipeline are required' }, { status: 400 })
+  const body = await request.json()
+  const pipeline: string = body.pipeline
+  // Support both single (libraryId) and bulk (libraryIds)
+  const ids: string[] = body.libraryIds ?? (body.libraryId ? [body.libraryId] : [])
+
+  if (!pipeline || ids.length === 0) {
+    return NextResponse.json({ error: 'pipeline and libraryId(s) are required' }, { status: 400 })
   }
 
-  const { data: template, error: tErr } = await supabase
+  const { data: templates, error: tErr } = await supabase
     .from('persona_library')
     .select('*')
-    .eq('id', libraryId)
-    .single()
+    .in('id', ids)
 
-  if (tErr || !template) {
-    return NextResponse.json({ error: 'Library template not found' }, { status: 404 })
+  if (tErr || !templates?.length) {
+    return NextResponse.json({ error: 'No library templates found' }, { status: 404 })
   }
 
-  // Copy the template into the account's personas
-  const { id: _id, created_at: _ca, updated_at: _ua, category: _cat, ...fields } = template
+  const rows = templates.map((template) => {
+    const { id: _id, created_at: _ca, updated_at: _ua, category: _cat, ...fields } = template
+    return { ...fields, account_id: params.accountId, pipeline }
+  })
+
   const { data, error } = await supabase
     .from('personas')
-    .insert({
-      ...fields,
-      account_id: params.accountId,
-      pipeline,
-    })
+    .insert(rows)
     .select()
-    .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ persona: data }, { status: 201 })
+  return NextResponse.json({ personas: data, count: data?.length ?? 0 }, { status: 201 })
 }

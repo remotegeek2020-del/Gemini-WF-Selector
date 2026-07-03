@@ -30,7 +30,8 @@ export default function PersonaLibraryModal({ accountId, pipelines, currentPipel
   const [loading, setLoading] = useState(true)
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [previewId, setPreviewId] = useState<string | null>(null)
   const [targetPipeline, setTargetPipeline] = useState(currentPipeline)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,17 +59,43 @@ export default function PersonaLibraryModal({ accountId, pipelines, currentPipel
     return true
   })
 
-  const selected = entries.find((e) => e.id === selectedId)
+  const preview = entries.find((e) => e.id === previewId)
+  const allFilteredSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id))
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        filtered.forEach((e) => next.delete(e.id))
+        return next
+      })
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        filtered.forEach((e) => next.add(e.id))
+        return next
+      })
+    }
+  }
 
   const handleImport = async () => {
-    if (!selectedId) return
+    if (selectedIds.size === 0) return
     setImporting(true)
     setError(null)
     try {
       const res = await fetch(`/api/accounts/${accountId}/personas/from-library`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ libraryId: selectedId, pipeline: targetPipeline }),
+        body: JSON.stringify({ libraryIds: Array.from(selectedIds), pipeline: targetPipeline }),
       })
       if (!res.ok) {
         const d = await res.json()
@@ -90,7 +117,9 @@ export default function PersonaLibraryModal({ accountId, pipelines, currentPipel
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Persona Library</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Browse and import template personas into your account</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Select one or more templates and import them into a pipeline
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,8 +157,28 @@ export default function PersonaLibraryModal({ accountId, pipelines, currentPipel
               </div>
             </div>
 
+            {/* Select all row */}
+            {!loading && filtered.length > 0 && (
+              <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-2 bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={toggleAll}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-xs text-gray-600 font-medium">
+                  {allFilteredSelected ? 'Deselect all' : `Select all ${filtered.length}`}
+                </span>
+                {selectedIds.size > 0 && (
+                  <span className="ml-auto text-xs text-indigo-600 font-semibold">
+                    {selectedIds.size} selected
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <svg className="animate-spin h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24">
@@ -142,82 +191,105 @@ export default function PersonaLibraryModal({ accountId, pipelines, currentPipel
                   {entries.length === 0 ? 'No templates in the library yet.' : 'No templates match your search.'}
                 </p>
               ) : (
-                filtered.map((entry) => (
-                  <button
-                    key={entry.id}
-                    onClick={() => setSelectedId(entry.id)}
-                    className={`w-full text-left p-3 rounded-lg border transition-all ${
-                      selectedId === entry.id
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
+                filtered.map((entry) => {
+                  const checked = selectedIds.has(entry.id)
+                  const isPreviewing = previewId === entry.id
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                        checked
+                          ? 'border-indigo-400 bg-indigo-50'
+                          : isPreviewing
+                          ? 'border-gray-300 bg-gray-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      onClick={() => toggleOne(entry.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleOne(entry.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0 cursor-pointer"
+                      />
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: entry.color }} />
-                      <span className="font-medium text-sm text-gray-900 flex-1 text-left">{entry.name}</span>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLORS[entry.category] || 'bg-gray-100 text-gray-600'}`}>
-                        {CATEGORY_LABELS[entry.category] || entry.category}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-gray-900 truncate">{entry.name}</p>
+                        {entry.title_role && (
+                          <p className="text-xs text-gray-500 truncate">{entry.title_role}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLORS[entry.category] || 'bg-gray-100 text-gray-600'}`}>
+                          {CATEGORY_LABELS[entry.category] || entry.category}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPreviewId(isPreviewing ? null : entry.id) }}
+                          className="text-gray-400 hover:text-indigo-600 transition-colors"
+                          title="Preview"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    {entry.title_role && (
-                      <p className="text-xs text-gray-500 mt-1 ml-5">{entry.title_role}</p>
-                    )}
-                    {entry.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 ml-5 line-clamp-1">{entry.description}</p>
-                    )}
-                  </button>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
 
           {/* Right: preview */}
           <div className="w-80 flex flex-col min-h-0">
-            {selected ? (
+            {preview ? (
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full" style={{ background: selected.color }} />
-                  <h3 className="font-semibold text-gray-900">{selected.name}</h3>
+                  <div className="w-4 h-4 rounded-full" style={{ background: preview.color }} />
+                  <h3 className="font-semibold text-gray-900">{preview.name}</h3>
                 </div>
-                {selected.title_role && <p className="text-sm text-gray-600">{selected.title_role}</p>}
-                {selected.description && (
-                  <p className="text-sm text-gray-500 italic">{selected.description}</p>
+                {preview.title_role && <p className="text-sm text-gray-600">{preview.title_role}</p>}
+                {preview.description && (
+                  <p className="text-sm text-gray-500 italic">{preview.description}</p>
                 )}
-
-                {selected.who_they_are && (
+                {preview.who_they_are && (
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Who They Are</p>
-                    <p className="text-xs text-gray-700">{selected.who_they_are}</p>
+                    <p className="text-xs text-gray-700">{preview.who_they_are}</p>
                   </div>
                 )}
-                {selected.primary_frustration && (
+                {preview.primary_frustration && (
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Primary Frustration</p>
-                    <p className="text-xs text-gray-700">{selected.primary_frustration}</p>
+                    <p className="text-xs text-gray-700">{preview.primary_frustration}</p>
                   </div>
                 )}
-                {selected.what_they_want && (
+                {preview.what_they_want && (
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">What They Want</p>
-                    <p className="text-xs text-gray-700">{selected.what_they_want}</p>
+                    <p className="text-xs text-gray-700">{preview.what_they_want}</p>
                   </div>
                 )}
-                {selected.decision_trigger && (
+                {preview.decision_trigger && (
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Decision Trigger</p>
-                    <p className="text-xs text-gray-700">{selected.decision_trigger}</p>
+                    <p className="text-xs text-gray-700">{preview.decision_trigger}</p>
                   </div>
                 )}
-                {selected.sells_into && (
+                {preview.sells_into && (
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Sells Into</p>
-                    <p className="text-xs text-gray-700">{selected.sells_into}</p>
+                    <p className="text-xs text-gray-700">{preview.sells_into}</p>
                   </div>
                 )}
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center p-6 text-center">
-                <p className="text-sm text-gray-400">Select a persona template to preview it</p>
+                <p className="text-sm text-gray-400">
+                  Click the <svg className="w-3.5 h-3.5 inline mx-0.5 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> icon on any persona to preview it
+                </p>
               </div>
             )}
 
@@ -238,10 +310,14 @@ export default function PersonaLibraryModal({ accountId, pipelines, currentPipel
               </div>
               <button
                 onClick={handleImport}
-                disabled={!selectedId || importing}
+                disabled={selectedIds.size === 0 || importing}
                 className="w-full py-2 px-4 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {importing ? 'Importing…' : 'Import Persona'}
+                {importing
+                  ? 'Importing…'
+                  : selectedIds.size === 0
+                  ? 'Select personas to import'
+                  : `Import ${selectedIds.size} Persona${selectedIds.size !== 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
