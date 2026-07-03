@@ -393,25 +393,66 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         </p>
       </div>
 
+      {/* Webhook URLs — all channels in one place */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Webhook Endpoint</CardTitle>
+          <CardTitle>Webhook URLs</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600 mb-2">
-            Configure this URL in Highlevel to receive lead webhooks for this account:
+        <CardContent className="space-y-3">
+          <p className="text-sm text-gray-600">
+            Paste each URL into the corresponding ad platform or CRM. Each channel has its own personas and lead routing.
           </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-xs text-gray-800 font-mono break-all">
-              {webhookUrl}
-            </code>
-            <Button variant="secondary" size="sm" onClick={handleCopyWebhook}>
-              Copy
-            </Button>
+          <div className="space-y-2">
+            {/* Main (LinkedIn / default) */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">LinkedIn / Default (Main)</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-gray-50 border border-gray-200 px-3 py-2 rounded text-xs text-gray-800 font-mono break-all">
+                  {webhookUrl}
+                </code>
+                <Button variant="secondary" size="sm" onClick={handleCopyWebhook}>Copy</Button>
+              </div>
+            </div>
+
+            {/* Additional pipelines */}
+            {pipelinesList.filter((p) => p.slug !== 'main').map((p) => (
+              <div key={p.slug}>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{p.name}</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-gray-50 border border-gray-200 px-3 py-2 rounded text-xs text-gray-800 font-mono break-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${accountId}/${p.slug}` : ''}
+                  </code>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/webhook/${accountId}/${p.slug}`).catch(() => {})}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {/* Nurture (if enabled) */}
+            {nurtureEnabled && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nurture (Cold / Limbo Leads)</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-indigo-50 border border-indigo-100 px-3 py-2 rounded text-xs text-indigo-800 font-mono break-all">
+                    {nurtureWebhookUrl}
+                  </code>
+                  <Button variant="secondary" size="sm" onClick={handleCopyNurtureWebhook}>Copy</Button>
+                </div>
+              </div>
+            )}
+
+            {pipelinesList.filter((p) => p.slug !== 'main').length === 0 && (
+              <p className="text-xs text-gray-400 italic">
+                Add Facebook Ads, Google Ads, or other pipelines in the Pipelines section below to get their webhook URLs here.
+              </p>
+            )}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            The account ID acts as the secret. Keep this URL private.
-          </p>
+          <p className="text-xs text-gray-400 mt-1">Keep these URLs private — the account ID is the secret.</p>
         </CardContent>
       </Card>
 
@@ -477,22 +518,9 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 mb-3">
-            Enable a separate pipeline for cold and limbo leads. When enabled, a dedicated menu and webhook become active. Nurture leads have their own personas and workflow routing.
+          <p className="text-sm text-gray-600">
+            Enable a separate pipeline for cold and limbo leads. When enabled, a dedicated menu and webhook become active. Nurture leads have their own personas and workflow routing. The webhook URL appears in the <strong>Webhook URLs</strong> section above.
           </p>
-          {nurtureEnabled && (
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Nurture webhook URL:</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-indigo-50 border border-indigo-100 px-3 py-2 rounded text-xs text-indigo-800 font-mono break-all">
-                  {nurtureWebhookUrl}
-                </code>
-                <Button variant="secondary" size="sm" onClick={handleCopyNurtureWebhook}>
-                  Copy
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
