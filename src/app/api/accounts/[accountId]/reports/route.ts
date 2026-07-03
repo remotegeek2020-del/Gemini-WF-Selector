@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import type { ReportSummary, PersonaReport } from '@/types'
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { accountId: string } }
 ) {
   const supabase = createServerClient()
@@ -24,11 +24,13 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { data: statusCounts, error: statusError } = await supabase
-    .from('leads')
-    .select('status')
-    .eq('account_id', params.accountId)
+  const { searchParams } = new URL(request.url)
+  const pipeline = searchParams.get('pipeline') || 'all'
 
+  let baseQuery = supabase.from('leads').select('status, pipeline').eq('account_id', params.accountId)
+  if (pipeline !== 'all') baseQuery = baseQuery.eq('pipeline', pipeline)
+
+  const { data: statusCounts, error: statusError } = await baseQuery
   if (statusError) return NextResponse.json({ error: statusError.message }, { status: 500 })
 
   const summary: ReportSummary = {
@@ -40,12 +42,32 @@ export async function GET(
     enriching: statusCounts?.filter((l) => l.status === 'enriching').length || 0,
   }
 
-  const { data: leadsWithPersonas, error: leadsError } = await supabase
+  // Pipeline breakdown (always across all pipelines for the channel breakdown section)
+  const { data: allLeads } = await supabase
     .from('leads')
-    .select('assigned_persona_id, created_at, personas(id, name, color)')
+    .select('pipeline, status')
+    .eq('account_id', params.accountId)
+
+  const pipelineMap = new Map<string, { total: number; assigned: number }>()
+  for (const lead of allLeads || []) {
+    const key = lead.pipeline || 'main'
+    if (!pipelineMap.has(key)) pipelineMap.set(key, { total: 0, assigned: 0 })
+    const entry = pipelineMap.get(key)!
+    entry.total++
+    if (lead.status === 'assigned') entry.assigned++
+  }
+  const pipelineBreakdown = Array.from(pipelineMap.entries())
+    .map(([slug, data]) => ({ slug, ...data }))
+    .sort((a, b) => b.total - a.total)
+
+  let leadsQuery = supabase
+    .from('leads')
+    .select('assigned_persona_id, created_at, pipeline, personas(id, name, color)')
     .eq('account_id', params.accountId)
     .order('created_at', { ascending: false })
+  if (pipeline !== 'all') leadsQuery = leadsQuery.eq('pipeline', pipeline)
 
+  const { data: leadsWithPersonas, error: leadsError } = await leadsQuery
   if (leadsError) return NextResponse.json({ error: leadsError.message }, { status: 500 })
 
   const personaMap = new Map<
@@ -81,5 +103,5 @@ export async function GET(
     }))
     .sort((a, b) => b.count - a.count)
 
-  return NextResponse.json({ summary, personaReports })
+  return NextResponse.json({ summary, personaReports, pipelineBreakdown })
 }

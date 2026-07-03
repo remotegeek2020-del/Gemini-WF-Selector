@@ -23,12 +23,28 @@ export async function PUT(
   }
 
   const body = await request.json()
-  const name = (body.name as string || '').trim()
-  if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+  const update: Record<string, unknown> = {}
+
+  if (body.name !== undefined) {
+    const name = (body.name as string || '').trim()
+    if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    update.name = name
+  }
+
+  if (body.notification_emails !== undefined) {
+    const emails = Array.isArray(body.notification_emails)
+      ? (body.notification_emails as string[]).map((e: string) => e.trim()).filter(Boolean)
+      : []
+    update.notification_emails = emails
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+  }
 
   const { data, error } = await supabase
     .from('pipelines')
-    .update({ name })
+    .update(update)
     .eq('id', params.pipelineId)
     .eq('account_id', params.accountId)
     .select()

@@ -63,10 +63,17 @@ function exportLeadsCSV(leads: Lead[], personaName?: string) {
   URL.revokeObjectURL(url)
 }
 
+function getPipelineLabel(slug: string): string {
+  const labels: Record<string, string> = { main: 'Main (LinkedIn)', nurture: 'Nurture' }
+  return labels[slug] || slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export default function SubAccountReportsPage() {
   const [accountId, setAccountId] = useState<string | null>(null)
   const [summary, setSummary] = useState<ReportSummary | null>(null)
   const [personaReports, setPersonaReports] = useState<PersonaReport[]>([])
+  const [pipelineBreakdown, setPipelineBreakdown] = useState<{ slug: string; total: number; assigned: number }[]>([])
+  const [activePipeline, setActivePipeline] = useState<string>('all')
   const [leads, setLeads] = useState<Lead[]>([])
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
@@ -92,11 +99,13 @@ export default function SubAccountReportsPage() {
     const fetchReports = async () => {
       setIsLoading(true)
       try {
-        const res = await fetch(`/api/accounts/${accountId}/reports`)
+        const qs = activePipeline !== 'all' ? `?pipeline=${activePipeline}` : ''
+        const res = await fetch(`/api/accounts/${accountId}/reports${qs}`)
         if (!res.ok) throw new Error('Failed to fetch reports')
         const data = await res.json()
         setSummary(data.summary)
         setPersonaReports(data.personaReports || [])
+        setPipelineBreakdown(data.pipelineBreakdown || [])
       } catch (err) {
         console.error(err)
       } finally {
@@ -104,14 +113,14 @@ export default function SubAccountReportsPage() {
       }
     }
     fetchReports()
-  }, [accountId])
+  }, [accountId, activePipeline])
 
   const fetchLeadsByPersona = useCallback(
     async (personaId: string) => {
       if (!accountId) return
       setIsLeadsLoading(true)
       try {
-        const queryParams = new URLSearchParams({ limit: '100' })
+        const queryParams = new URLSearchParams({ limit: '100', pipeline: activePipeline })
         if (personaId && personaId !== 'unassigned') {
           queryParams.set('persona_id', personaId)
         }
@@ -125,7 +134,7 @@ export default function SubAccountReportsPage() {
         setIsLeadsLoading(false)
       }
     },
-    [accountId]
+    [accountId, activePipeline]
   )
 
   useEffect(() => {
@@ -143,12 +152,72 @@ export default function SubAccountReportsPage() {
     )
   }
 
+  const allPipelinesTotal = pipelineBreakdown.reduce((s, p) => s + p.total, 0)
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-        <p className="text-sm text-gray-500 mt-1">Lead enrichment and persona assignment summary</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+          <p className="text-sm text-gray-500 mt-1">Lead enrichment and persona assignment summary</p>
+        </div>
+        {pipelineBreakdown.length > 1 && (
+          <select
+            value={activePipeline}
+            onChange={(e) => { setActivePipeline(e.target.value); setSelectedPersonaId('') }}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">All Channels</option>
+            {pipelineBreakdown.map((p) => (
+              <option key={p.slug} value={p.slug}>{getPipelineLabel(p.slug)}</option>
+            ))}
+          </select>
+        )}
       </div>
+
+      {pipelineBreakdown.length > 1 && (
+        <Card>
+          <CardHeader><CardTitle>Leads by Channel</CardTitle></CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-6 font-medium text-gray-500 text-xs uppercase tracking-wide">Channel</th>
+                  <th className="text-left py-3 px-6 font-medium text-gray-500 text-xs uppercase tracking-wide">Total Leads</th>
+                  <th className="text-left py-3 px-6 font-medium text-gray-500 text-xs uppercase tracking-wide">Assigned</th>
+                  <th className="text-left py-3 px-6 font-medium text-gray-500 text-xs uppercase tracking-wide">% of Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pipelineBreakdown.map((p) => (
+                  <tr
+                    key={p.slug}
+                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${activePipeline === p.slug ? 'bg-indigo-50' : ''}`}
+                    onClick={() => { setActivePipeline(activePipeline === p.slug ? 'all' : p.slug); setSelectedPersonaId('') }}
+                  >
+                    <td className="py-3 px-6 font-medium text-gray-900">{getPipelineLabel(p.slug)}</td>
+                    <td className="py-3 px-6 font-semibold text-gray-900">{p.total}</td>
+                    <td className="py-3 px-6 text-green-700 font-medium">{p.assigned}</td>
+                    <td className="py-3 px-6">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-100 rounded-full h-1.5 max-w-[100px]">
+                          <div
+                            className="h-1.5 rounded-full bg-indigo-500"
+                            style={{ width: `${allPipelinesTotal ? Math.round((p.total / allPipelinesTotal) * 100) : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {allPipelinesTotal ? Math.round((p.total / allPipelinesTotal) * 100) : 0}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

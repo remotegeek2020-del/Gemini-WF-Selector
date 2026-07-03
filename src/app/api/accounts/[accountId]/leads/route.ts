@@ -34,9 +34,10 @@ export async function GET(
     .from('leads')
     .select('*, personas(id, name, color)', { count: 'exact' })
     .eq('account_id', params.accountId)
-    .eq('pipeline', pipeline)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
+
+  if (pipeline !== 'all') query = query.eq('pipeline', pipeline)
 
   if (status) query = query.eq('status', status)
   if (personaId) query = query.eq('assigned_persona_id', personaId)

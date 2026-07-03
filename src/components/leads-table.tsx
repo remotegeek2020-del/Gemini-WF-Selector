@@ -10,6 +10,7 @@ interface LeadsTableProps {
   onEnrich?: (leadId: string) => Promise<void>
   onDelete?: (leadId: string) => Promise<void>
   onBulkDelete?: (ids: string[]) => Promise<void>
+  showPipeline?: boolean
 }
 
 function formatDate(dateStr: string): string {
@@ -40,7 +41,12 @@ function getSourceColor(source: string | null): string {
   }
 }
 
-export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete }: LeadsTableProps) {
+function getPipelineLabel(pipeline: string): string {
+  const labels: Record<string, string> = { main: 'Main', nurture: 'Nurture' }
+  return labels[pipeline] || pipeline.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline }: LeadsTableProps) {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -49,6 +55,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete }: 
 
   const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id))
   const someSelected = leads.some((l) => selectedIds.has(l.id))
+  const colSpanBase = (onBulkDelete ? 1 : 0) + 6 + (showPipeline ? 1 : 0) + 1
 
   const toggleAll = () => {
     if (allSelected) {
@@ -157,6 +164,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete }: 
               <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Name</th>
               <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Email</th>
               <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Source</th>
+              {showPipeline && <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Channel</th>}
               <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Status</th>
               <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Persona</th>
               <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wide">Created</th>
@@ -167,7 +175,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete }: 
             {leads.map((lead) => {
               const isSelected = selectedIds.has(lead.id)
               const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown'
-              const colSpan = onBulkDelete ? 8 : 7
+              const colSpan = colSpanBase
 
               return (
                 <>
@@ -198,6 +206,13 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete }: 
                         {getSourceIcon(lead.source)} {lead.source || 'other'}
                       </span>
                     </td>
+                    {showPipeline && (
+                      <td className="py-3 px-4">
+                        <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded font-medium">
+                          {getPipelineLabel(lead.pipeline)}
+                        </span>
+                      </td>
+                    )}
                     <td className="py-3 px-4"><StatusBadge status={lead.status} /></td>
                     <td className="py-3 px-4">
                       {lead.personas ? (

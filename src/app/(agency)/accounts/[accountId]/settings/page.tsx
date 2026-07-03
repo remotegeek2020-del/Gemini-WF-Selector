@@ -109,11 +109,13 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [aiApiKey, setAiApiKey] = useState<string>('')
 
   // Pipelines state
-  const [pipelinesList, setPipelinesList] = useState<{ id: string; name: string; slug: string }[]>([])
+  const [pipelinesList, setPipelinesList] = useState<{ id: string; name: string; slug: string; notification_emails: string[] }[]>([])
   const [newPipelineName, setNewPipelineName] = useState('')
   const [addingPipeline, setAddingPipeline] = useState(false)
   const [renamingPipelineId, setRenamingPipelineId] = useState<string | null>(null)
   const [renamePipelineValue, setRenamePipelineValue] = useState('')
+  const [editingEmailsPipelineId, setEditingEmailsPipelineId] = useState<string | null>(null)
+  const [pipelineEmailInput, setPipelineEmailInput] = useState('')
 
   // Postmark + global notification emails
   const [postmarkKey, setPostmarkKey] = useState('')
@@ -531,9 +533,9 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           <p className="text-sm text-gray-600">Manage lead routing pipelines. Each pipeline has its own personas and webhook URL (<code className="text-xs bg-gray-100 px-1 rounded">/api/webhook/{accountId}/[slug]</code>).</p>
           <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
             {pipelinesList.map((pl) => (
-              <div key={pl.id} className="flex items-center justify-between px-4 py-3 bg-white">
+              <div key={pl.id} className="px-4 py-3 bg-white space-y-2">
                 {renamingPipelineId === pl.id ? (
-                  <div className="flex items-center gap-2 flex-1">
+                  <div className="flex items-center gap-2">
                     <input
                       value={renamePipelineValue}
                       onChange={(e) => setRenamePipelineValue(e.target.value)}
@@ -556,13 +558,20 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                     <button onClick={() => setRenamingPipelineId(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
                   </div>
                 ) : (
-                  <>
+                  <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{pl.name}</p>
                       <p className="text-xs text-gray-400 font-mono">slug: {pl.slug}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <button onClick={() => { setRenamingPipelineId(pl.id); setRenamePipelineValue(pl.name) }} className="text-xs text-indigo-600 hover:underline">Rename</button>
+                      <button
+                        onClick={() => {
+                          setEditingEmailsPipelineId(editingEmailsPipelineId === pl.id ? null : pl.id)
+                          setPipelineEmailInput('')
+                        }}
+                        className="text-xs text-indigo-600 hover:underline"
+                      >Notifications</button>
                       {pl.slug !== 'main' && (
                         <button
                           onClick={async () => {
@@ -574,7 +583,71 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                         >Delete</button>
                       )}
                     </div>
-                  </>
+                  </div>
+                )}
+
+                {/* Per-pipeline notification emails */}
+                {editingEmailsPipelineId === pl.id && (
+                  <div className="pt-2 border-t border-gray-100 space-y-2">
+                    <p className="text-xs font-medium text-gray-600">Notification emails for <span className="font-semibold">{pl.name}</span></p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(pl.notification_emails || []).map((email) => (
+                        <span key={email} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                          {email}
+                          <button
+                            onClick={async () => {
+                              const updated = (pl.notification_emails || []).filter((e) => e !== email)
+                              await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notification_emails: updated }),
+                              })
+                              setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
+                            }}
+                            className="text-indigo-400 hover:text-red-500 ml-0.5"
+                          >×</button>
+                        </span>
+                      ))}
+                      {(pl.notification_emails || []).length === 0 && (
+                        <p className="text-xs text-gray-400 italic">No notification emails — add one below</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={pipelineEmailInput}
+                        onChange={(e) => setPipelineEmailInput(e.target.value)}
+                        placeholder="email@example.com"
+                        className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        onKeyDown={async (e) => {
+                          if (e.key === 'Enter' && pipelineEmailInput.trim()) {
+                            const updated = [...(pl.notification_emails || []), pipelineEmailInput.trim()]
+                            await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ notification_emails: updated }),
+                            })
+                            setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
+                            setPipelineEmailInput('')
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!pipelineEmailInput.trim()) return
+                          const updated = [...(pl.notification_emails || []), pipelineEmailInput.trim()]
+                          await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ notification_emails: updated }),
+                          })
+                          setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
+                          setPipelineEmailInput('')
+                        }}
+                        className="text-xs text-indigo-600 font-medium border border-indigo-300 rounded px-3 py-1 hover:bg-indigo-50"
+                      >Add</button>
+                    </div>
+                  </div>
                 )}
               </div>
             ))}

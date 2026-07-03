@@ -32,7 +32,7 @@ export async function POST(
   // Verify the pipeline exists for this account
   const { data: pipelineRecord } = await supabase
     .from('pipelines')
-    .select('id, slug')
+    .select('id, slug, notification_emails')
     .eq('account_id', accountId)
     .eq('slug', pipeline)
     .single()
@@ -94,14 +94,16 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 })
   }
 
-  waitUntil(enrichLead(accountId, lead.id, pipeline).catch((err) => {
+  const pipelineEmails: string[] = pipelineRecord.notification_emails || []
+
+  waitUntil(enrichLead(accountId, lead.id, pipeline, pipelineEmails).catch((err) => {
     console.error('Failed to trigger enrichment:', err)
   }))
 
   return NextResponse.json({ success: true, leadId: lead.id }, { status: 200 })
 }
 
-async function enrichLead(accountId: string, leadId: string, pipeline: string) {
+async function enrichLead(accountId: string, leadId: string, pipeline: string, pipelineEmails: string[]) {
   const supabase = createAdminClient()
 
   const { data: lead } = await supabase.from('leads').select('*').eq('id', leadId).single()
@@ -109,20 +111,13 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
 
   await supabase.from('leads').update({ status: 'enriching', updated_at: new Date().toISOString() }).eq('id', leadId)
 
-  const [apiKeysResult, accountResult] = await Promise.all([
-    supabase
-      .from('api_keys')
-      .select('service, key_value, extra_data')
-      .eq('account_id', accountId)
-      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'highlevel_custom_fields', 'postmark']),
-    supabase
-      .from('accounts')
-      .select('notification_emails')
-      .eq('id', accountId)
-      .single(),
-  ])
+  const { data: apiKeysData } = await supabase
+    .from('api_keys')
+    .select('service, key_value, extra_data')
+    .eq('account_id', accountId)
+    .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'highlevel_custom_fields', 'postmark'])
 
-  const keyMap = Object.fromEntries((apiKeysResult.data || []).map((k) => [k.service, k]))
+  const keyMap = Object.fromEntries((apiKeysData || []).map((k) => [k.service, k]))
   const apolloKey = keyMap['apollo']?.key_value
   const highlevelKey = keyMap['highlevel']?.key_value
   const lushaKey = keyMap['lusha']?.key_value || undefined
@@ -131,7 +126,6 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
   const postmarkFromEmail = postmarkExtra?.from_email || ''
   const postmarkFromName = postmarkExtra?.from_name || ''
   const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
-  const globalEmails: string[] = accountResult.data?.notification_emails || []
 
   if (!apolloKey) {
     await supabase.from('leads').update({ status: 'failed', error_message: 'Apollo API key not configured.', updated_at: new Date().toISOString() }).eq('id', leadId)
@@ -268,10 +262,10 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string) {
     }
   }
 
-  // Send email notifications
+  // Send email notifications — pipeline emails + persona-specific emails
   if (postmarkKey && postmarkFrom && matched) {
     const personaEmails: string[] = matched.notification_emails || []
-    const toEmails = Array.from(new Set([...globalEmails, ...personaEmails])).filter(Boolean)
+    const toEmails = Array.from(new Set([...pipelineEmails, ...personaEmails])).filter(Boolean)
     if (toEmails.length > 0) {
       const isDefaultFallback = !result.persona_id && !!matched.is_default
       try {

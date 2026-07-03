@@ -40,6 +40,10 @@ export default function SubAccountDashboardPage() {
       .catch(() => {})
   }, [accountId])
 
+  const pipelineOptions = pipelines.length > 1
+    ? [{ id: 'all', name: 'All Channels', slug: 'all' }, ...pipelines]
+    : pipelines
+
   const fetchLeads = useCallback(async () => {
     if (!accountId) return
     setIsLoading(true)
@@ -122,13 +126,13 @@ export default function SubAccountDashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {pipelines.length > 1 && (
+          {pipelineOptions.length > 1 && (
             <select
               value={activePipeline}
               onChange={(e) => setActivePipeline(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              {pipelines.map((p) => (
+              {pipelineOptions.map((p) => (
                 <option key={p.id} value={p.slug}>{p.name}</option>
               ))}
             </select>
@@ -172,7 +176,7 @@ export default function SubAccountDashboardPage() {
               </svg>
             </div>
           ) : (
-            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} onBulkDelete={handleBulkDelete} />
+            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} onBulkDelete={handleBulkDelete} showPipeline={activePipeline === 'all'} />
           )}
         </CardContent>
       </Card>
