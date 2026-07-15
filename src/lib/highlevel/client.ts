@@ -161,6 +161,20 @@ export async function updateContactProfile(
   if (!res.ok) throw new Error(`HL update contact profile ${res.status}: ${await res.text()}`)
 }
 
+// ── Attribution extraction ────────────────────────────────────────────────────
+
+export function extractAttributionFromHLPayload(body: Record<string, unknown>): Record<string, string> | null {
+  const contact = body.contact as Record<string, unknown> | undefined
+  const raw = (contact?.attributionSource || body.attributionSource) as Record<string, unknown> | undefined
+  if (!raw || Object.keys(raw).length === 0) return null
+  const keys = ['campaign', 'campaignId', 'adId', 'adSetId', 'formName', 'utmSource', 'utmMedium', 'utmContent', 'utm_campaign', 'sessionSource', 'source', 'medium', 'keyword']
+  const result: Record<string, string> = {}
+  for (const k of keys) {
+    if (raw[k] && typeof raw[k] === 'string') result[k] = raw[k] as string
+  }
+  return Object.keys(result).length > 0 ? result : null
+}
+
 // ── LinkedIn extraction ───────────────────────────────────────────────────────
 
 export function extractLinkedinFromHLPayload(body: Record<string, unknown>): string | undefined {

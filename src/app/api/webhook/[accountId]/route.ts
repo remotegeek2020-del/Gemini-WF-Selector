@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload, extractAttributionFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
@@ -79,6 +79,8 @@ export async function POST(
     }
   }
 
+  const attribution = extractAttributionFromHLPayload(body)
+
   // Create lead record scoped to this account
   const { data: lead, error: insertError } = await supabase
     .from('leads')
@@ -92,6 +94,7 @@ export async function POST(
       source,
       raw_data: body,
       status: 'pending',
+      ...(attribution ? { attribution } : {}),
     })
     .select()
     .single()

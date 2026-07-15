@@ -4,7 +4,7 @@ export const maxDuration = 60
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload } from '@/lib/highlevel/client'
+import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload, extractAttributionFromHLPayload } from '@/lib/highlevel/client'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
 
@@ -79,13 +79,15 @@ export async function POST(
     const postmarkFromName = postmarkExtra?.from_name || ''
     const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
 
-    const { data: accountData } = await createAdminClient()
-      .from('accounts')
+    // Fetch pipeline-level notification emails as fallback
+    const adminSb = createAdminClient()
+    const { data: pipelineData } = await adminSb
+      .from('pipelines')
       .select('notification_emails')
-      .eq('id', accountId)
+      .eq('account_id', accountId)
+      .eq('slug', lead.pipeline || 'main')
       .single()
-    const globalEmails: string[] = accountData?.notification_emails || []
-    console.log('[Email] globalEmails from account:', globalEmails)
+    const pipelineEmails: string[] = pipelineData?.notification_emails || []
 
     if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
 
@@ -191,6 +193,9 @@ export async function POST(
     const enrichedTitle = (ed.title as string | undefined) || (apolloRaw.title as string | undefined) || undefined
     const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || (ed.hl_linkedin_url as string | undefined) || undefined
 
+    // Extract attribution from stored raw_data (for leads that arrived before this feature)
+    const attribution = extractAttributionFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
+
     // Build lead update — always refresh enriched_data; also backfill
     // first_name/last_name/email/phone from Apollo if the lead arrived with blanks
     const leadUpdate: Record<string, unknown> = {
@@ -199,6 +204,7 @@ export async function POST(
       persona_reasoning: reasoning,
       status: finalStatus,
       updated_at: new Date().toISOString(),
+      ...(attribution && !lead.attribution ? { attribution } : {}),
     }
     if (enrichedFirstName && !lead.first_name) leadUpdate.first_name = enrichedFirstName
     if (enrichedLastName && !lead.last_name) leadUpdate.last_name = enrichedLastName
@@ -267,10 +273,10 @@ export async function POST(
     } else if (!matchedPersonaForEmail) {
       console.warn('[Email] skipped — no matched persona (status:', finalStatus, ')')
     } else {
-      const personaEmails: string[] = matchedPersonaForEmail.notification_emails || []
-      const toEmails = Array.from(new Set([...globalEmails, ...personaEmails])).filter(Boolean)
+      const personaEmails: string[] = (matchedPersonaForEmail.notification_emails || []).filter(Boolean)
+      const toEmails = personaEmails.length > 0 ? personaEmails : pipelineEmails.filter(Boolean)
       if (toEmails.length === 0) {
-        console.warn('[Email] skipped — no recipient emails configured (global:', globalEmails.length, 'persona:', personaEmails.length, ')')
+        console.warn('[Email] skipped — no recipient emails configured for persona or pipeline')
       } else {
         console.log('[Email] sending to:', toEmails)
         const isDefaultFallback = !result.persona_id && !!matchedPersonaForEmail.is_default

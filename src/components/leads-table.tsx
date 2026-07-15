@@ -246,6 +246,31 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                     <tr key={`${lead.id}-expanded`} className="bg-gray-50">
                       <td colSpan={colSpan} className="px-4 py-4">
                         <div className="grid grid-cols-2 gap-4 items-start">
+                          {lead.attribution && Object.keys(lead.attribution).length > 0 && (
+                            <div className="col-span-2">
+                              <h4 className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2">Attribution</h4>
+                              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                                {lead.attribution.campaign && (
+                                  <><dt className="text-gray-500 text-xs">Campaign</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.campaign}</dd></>
+                                )}
+                                {lead.attribution.utmContent && (
+                                  <><dt className="text-gray-500 text-xs">Ad</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.utmContent}</dd></>
+                                )}
+                                {lead.attribution.utmMedium && (
+                                  <><dt className="text-gray-500 text-xs">Ad Set</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.utmMedium}</dd></>
+                                )}
+                                {lead.attribution.formName && (
+                                  <><dt className="text-gray-500 text-xs">Form</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.formName}</dd></>
+                                )}
+                                {lead.attribution.sessionSource && (
+                                  <><dt className="text-gray-500 text-xs">Session Source</dt><dd className="text-gray-800 text-xs font-medium">{lead.attribution.sessionSource}</dd></>
+                                )}
+                                {lead.attribution.adId && (
+                                  <><dt className="text-gray-500 text-xs">Ad ID</dt><dd className="text-gray-800 text-xs font-mono">{lead.attribution.adId}</dd></>
+                                )}
+                              </dl>
+                            </div>
+                          )}
                           {lead.persona_reasoning && (
                             <div>
                               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">AI Reasoning</h4>

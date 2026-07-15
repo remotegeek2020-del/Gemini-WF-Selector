@@ -116,6 +116,7 @@ export interface Lead {
   source: string | null
   pipeline: string
   raw_data: Record<string, unknown>
+  attribution: Record<string, string> | null
   enriched_data: Record<string, unknown> | null
   assigned_persona_id: string | null
   persona_reasoning: string | null
