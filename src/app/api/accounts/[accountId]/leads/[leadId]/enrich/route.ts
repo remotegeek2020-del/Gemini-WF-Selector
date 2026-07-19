@@ -274,7 +274,7 @@ export async function POST(
       console.warn('[Email] skipped — no matched persona (status:', finalStatus, ')')
     } else {
       const personaEmails: string[] = (matchedPersonaForEmail.notification_emails || []).filter(Boolean)
-      const toEmails = personaEmails.length > 0 ? personaEmails : pipelineEmails.filter(Boolean)
+      const toEmails = Array.from(new Set([...pipelineEmails, ...personaEmails])).filter(Boolean)
       if (toEmails.length === 0) {
         console.warn('[Email] skipped — no recipient emails configured for persona or pipeline')
       } else {
