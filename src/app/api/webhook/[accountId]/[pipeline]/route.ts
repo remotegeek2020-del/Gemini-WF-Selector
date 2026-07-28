@@ -57,8 +57,8 @@ export async function POST(
   // Extract attribution first — UTM source takes priority over tags
   const attribution = extractAttributionFromHLPayload(body)
 
-  // Source: prefer UTM/session source from HL attribution, fall back to tags
-  let source = 'other'
+  // Source: prefer UTM/session source from HL attribution, fall back to tags, then pipeline slug
+  let source: string = pipeline  // pipeline slug is the guaranteed fallback
   const hlSource = attribution?.utmSource || attribution?.sessionSource || attribution?.source
   if (hlSource) {
     source = hlSource.toLowerCase()

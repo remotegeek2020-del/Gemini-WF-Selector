@@ -23,8 +23,16 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function classifySource(source: string | null): 'facebook' | 'linkedin' | 'google' | null {
+  const s = source?.toLowerCase() || ''
+  if (s.includes('facebook') || s.includes('fb') || s.includes('meta')) return 'facebook'
+  if (s.includes('linkedin')) return 'linkedin'
+  if (s.includes('google')) return 'google'
+  return null
+}
+
 function getSourceIcon(source: string | null): string {
-  switch (source?.toLowerCase()) {
+  switch (classifySource(source)) {
     case 'facebook': return 'FB'
     case 'linkedin': return 'LI'
     case 'google': return 'GG'
@@ -33,7 +41,7 @@ function getSourceIcon(source: string | null): string {
 }
 
 function getSourceColor(source: string | null): string {
-  switch (source?.toLowerCase()) {
+  switch (classifySource(source)) {
     case 'facebook': return 'bg-blue-100 text-blue-800'
     case 'linkedin': return 'bg-sky-100 text-sky-800'
     case 'google': return 'bg-orange-100 text-orange-800'
