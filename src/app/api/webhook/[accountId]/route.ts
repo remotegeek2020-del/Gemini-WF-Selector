@@ -55,31 +55,32 @@ export async function POST(
   const email = body.email as string | undefined
   const phone = (body.phone || body.phoneRaw) as string | undefined
 
-  // Determine source from tags or custom fields
+  // Extract attribution first — UTM source takes priority over tags
+  const attribution = extractAttributionFromHLPayload(body)
+
+  // Source: prefer UTM/session source from HL attribution, fall back to tags
   let source = 'other'
-  const rawTags = body.tags
-  const tags = Array.isArray(rawTags) ? rawTags : typeof rawTags === 'string' ? [rawTags] : []
-  const tagsLower = tags.map((t: string) => t.toLowerCase())
+  const hlSource = attribution?.utmSource || attribution?.sessionSource || attribution?.source
+  if (hlSource) {
+    source = hlSource.toLowerCase()
+  } else {
+    const rawTags = body.tags
+    const tags = Array.isArray(rawTags) ? rawTags : typeof rawTags === 'string' ? [rawTags] : []
+    const tagsLower = tags.map((t: string) => t.toLowerCase())
+    if (tagsLower.some((t) => t.includes('facebook') || t.includes('fb'))) source = 'facebook'
+    else if (tagsLower.some((t) => t.includes('linkedin'))) source = 'linkedin'
+    else if (tagsLower.some((t) => t.includes('google'))) source = 'google'
 
-  if (tagsLower.some((t) => t.includes('facebook') || t.includes('fb'))) {
-    source = 'facebook'
-  } else if (tagsLower.some((t) => t.includes('linkedin'))) {
-    source = 'linkedin'
-  } else if (tagsLower.some((t) => t.includes('google'))) {
-    source = 'google'
-  }
-
-  const customFields = body.customFields as Record<string, unknown>[] | undefined
-  if (customFields && Array.isArray(customFields)) {
-    for (const field of customFields) {
-      const fieldValue = String(field.value || '').toLowerCase()
-      if (fieldValue.includes('facebook')) source = 'facebook'
-      else if (fieldValue.includes('linkedin')) source = 'linkedin'
-      else if (fieldValue.includes('google')) source = 'google'
+    const customFields = body.customFields as Record<string, unknown>[] | undefined
+    if (customFields && Array.isArray(customFields)) {
+      for (const field of customFields) {
+        const fieldValue = String(field.value || '').toLowerCase()
+        if (fieldValue.includes('facebook')) source = 'facebook'
+        else if (fieldValue.includes('linkedin')) source = 'linkedin'
+        else if (fieldValue.includes('google')) source = 'google'
+      }
     }
   }
-
-  const attribution = extractAttributionFromHLPayload(body)
 
   // Create lead record scoped to this account
   const { data: lead, error: insertError } = await supabase
