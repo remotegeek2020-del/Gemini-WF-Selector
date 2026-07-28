@@ -122,6 +122,8 @@ export interface Lead {
   persona_reasoning: string | null
   status: LeadStatus
   workflow_triggered: boolean
+  is_hot: boolean | null
+  hot_reasoning: string | null
   error_message: string | null
   created_at: string
   updated_at: string

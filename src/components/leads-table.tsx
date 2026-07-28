@@ -203,8 +203,13 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                       </td>
                     )}
                     <td className="py-3 px-4">
-                      <div className="font-medium text-gray-900">
-                        {name !== 'Unknown' ? name : <span className="text-gray-400 italic">Unknown</span>}
+                      <div className="flex items-center gap-1.5">
+                        {lead.is_hot && (
+                          <span title="AI-flagged high-priority lead" className="text-base leading-none">🔥</span>
+                        )}
+                        <div className="font-medium text-gray-900">
+                          {name !== 'Unknown' ? name : <span className="text-gray-400 italic">Unknown</span>}
+                        </div>
                       </div>
                       {lead.phone && <div className="text-xs text-gray-500 mt-0.5">{lead.phone}</div>}
                     </td>
@@ -277,6 +282,16 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                                   <><dt className="text-gray-500 text-xs">Ad ID</dt><dd className="text-gray-800 text-xs font-mono">{lead.attribution.adId}</dd></>
                                 )}
                               </dl>
+                            </div>
+                          )}
+                          {lead.is_hot && lead.hot_reasoning && (
+                            <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-base">🔥</span>
+                                <h4 className="text-xs font-semibold text-orange-700 uppercase tracking-wide">AI: High-Priority Lead</h4>
+                              </div>
+                              <p className="text-sm text-orange-900">{lead.hot_reasoning}</p>
+                              <p className="text-xs text-orange-500 italic mt-1">AI assessment only — use as a guide. Your judgment is final.</p>
                             </div>
                           )}
                           {lead.persona_reasoning && (

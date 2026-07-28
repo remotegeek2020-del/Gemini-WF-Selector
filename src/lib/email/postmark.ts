@@ -10,6 +10,8 @@ interface LeadNotificationData {
   personaColor: string
   reasoning: string
   isDefaultFallback: boolean
+  isHot?: boolean
+  hotReasoning?: string
   pipeline: string
   source?: string
   rawData?: Record<string, unknown>
@@ -195,8 +197,22 @@ export async function sendLeadNotification(
     lead.source ? row('Lead Source', lead.source) : '',
   ].join('')
 
+  const hotBannerHtml = lead.isHot
+    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <span style="font-size:22px;line-height:1;">🔥</span>
+      <div>
+        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#c2410c;">AI-Flagged: High-Priority Lead</p>
+        <p style="margin:0 0 6px;font-size:13px;color:#7c2d12;">${lead.hotReasoning || ''}</p>
+        <p style="margin:0;font-size:11px;color:#9a3412;font-style:italic;">This is an AI assessment and should be used as a guide only. Your own judgment is the final authority.</p>
+      </div>
+    </div>
+  </div>`
+    : ''
+
   const htmlBody = `
 <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f9fafb;padding:24px;">
+  ${hotBannerHtml}
   <div style="background:#fff;border-radius:8px;padding:24px;border:1px solid #e5e7eb;">
 
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
@@ -226,6 +242,9 @@ export async function sendLeadNotification(
 </div>`
 
   const textBody = [
+    lead.isHot ? `🔥 HIGH-PRIORITY LEAD (AI Assessment — use as guide only)` : '',
+    lead.isHot && lead.hotReasoning ? lead.hotReasoning : '',
+    lead.isHot ? '' : '',
     `New Lead Assigned — ${lead.personaName} (${score})`,
     '',
     '--- CONTACT INFO ---',

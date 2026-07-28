@@ -8,6 +8,7 @@ import { runEnrichmentAgent } from '@/lib/ai/agent'
 import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload, extractAttributionFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
+import { assessLeadHotness } from '@/lib/ai/hot-assessment'
 import type { AIConfig } from '@/types'
 
 export async function GET() {
@@ -200,11 +201,22 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
   const enrichedTitle = (ed.title as string) || (apolloRaw.title as string) || undefined
   const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || (ed.hl_linkedin_url as string | undefined) || undefined
 
+  const matched = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
+  const isDefaultFallback = !result.persona_id && !!matched?.is_default
+  const hotAssessment = await assessLeadHotness(aiConfig, {
+    enrichedData: result.enriched_data || {},
+    persona: matched || null,
+    isDefaultFallback,
+    source: lead.source,
+  })
+
   const leadUpdate: Record<string, unknown> = {
     enriched_data: result.enriched_data,
     assigned_persona_id: assignedPersonaId,
     persona_reasoning: reasoning,
     status: finalStatus,
+    is_hot: hotAssessment.is_hot,
+    hot_reasoning: hotAssessment.hot_reasoning,
     updated_at: new Date().toISOString(),
   }
   if (enrichedFirstName && !lead.first_name) leadUpdate.first_name = enrichedFirstName
@@ -240,8 +252,6 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     }
   }
 
-  const matched = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
-
   // HL workflow + post-enrichment actions
   if (matched && highlevelKey) {
     const contactId = lead.highlevel_contact_id
@@ -257,7 +267,6 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     }
 
     if (contactId) {
-      const isDefaultFallback = !result.persona_id && !!matched.is_default
       await runPostEnrichmentHLActions({
         apiKey: highlevelKey, locationId, contactId, persona: matched, reasoning, isDefaultFallback, fieldIds,
         leadData: {
@@ -277,7 +286,6 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     const personaEmails: string[] = (matched.notification_emails || []).filter(Boolean)
     const toEmails = Array.from(new Set([...pipelineEmails, ...personaEmails])).filter(Boolean)
     if (toEmails.length > 0) {
-      const isDefaultFallback = !result.persona_id && !!matched.is_default
       try {
         await sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
           firstName: enrichedFirstName || lead.first_name || undefined,
@@ -291,6 +299,8 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
           personaColor: matched.color,
           reasoning,
           isDefaultFallback,
+          isHot: hotAssessment.is_hot,
+          hotReasoning: hotAssessment.hot_reasoning,
           pipeline,
           source: lead.source || undefined,
           rawData: lead.raw_data || undefined,
