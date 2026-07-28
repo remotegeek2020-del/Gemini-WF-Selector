@@ -108,8 +108,17 @@ export async function sendLeadNotification(
   const lushaTitle = ed.lusha_current_title as string | undefined
   const lushaCompany = ed.lusha_current_company as string | undefined
 
-  // Employment history
-  const employment = (ed.employment_history as { company?: string; title?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined) || []
+  // Employment history — filter out our own company so leads don't show us as their employer
+  const employment = ((ed.employment_history as { company?: string; title?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined) || [])
+    .filter((e) => !e.company?.toLowerCase().includes('payprotec'))
+
+  // LinkedIn — prefer caller-supplied, fall back to enrichedData directly
+  const effectiveLinkedin =
+    lead.linkedinUrl ||
+    (apolloRaw.linkedin_url as string | undefined) ||
+    (ed.linkedin_url as string | undefined) ||
+    (ed.hl_linkedin_url as string | undefined) ||
+    undefined
 
   // Social profiles
   const twitterUrl = apolloRaw.twitter_url as string | undefined
@@ -132,6 +141,9 @@ export async function sendLeadNotification(
   const seniority = ed.seniority as string | undefined
   const headline = ed.headline as string | undefined
   const keywords = (org.keywords as string[] | undefined)?.slice(0, 8).join(', ')
+  const departments = (apolloRaw.departments as string[] | undefined)?.join(', ')
+  const photoUrl = apolloRaw.photo_url as string | undefined
+  const orgPhone = (org.primary_phone as { number?: string } | undefined)?.number || (org.sanitized_phone as string | undefined)
 
   // Build HTML sections
   const allEmails = Array.from(new Set([lead.email, ...lushaEmails].filter(Boolean))) as string[]
@@ -144,10 +156,11 @@ export async function sendLeadNotification(
     allPhones.length ? row('Phone', allPhones.join('<br>')) : '',
     effectiveCompany ? row('Company', effectiveCompany) : '',
     effectiveTitle ? row('Title', effectiveTitle) : '',
+    departments ? row('Department', departments) : '',
     seniority ? row('Seniority', seniority) : '',
     personLocation ? row('Location', String(personLocation)) : '',
     headline ? row('Headline', String(headline)) : '',
-    lead.linkedinUrl ? row('LinkedIn', 'View Profile', lead.linkedinUrl) : '',
+    effectiveLinkedin ? row('LinkedIn', 'View Profile →', effectiveLinkedin) : '',
     twitterUrl ? row('Twitter', 'View Profile', twitterUrl) : '',
     githubUrl ? row('GitHub', 'View Profile', githubUrl) : '',
     facebookUrl ? row('Facebook', 'View Profile', facebookUrl) : '',
@@ -160,9 +173,10 @@ export async function sendLeadNotification(
     funding ? row('Total Funding', funding) : '',
     founded ? row('Founded', String(founded)) : '',
     companyLocation ? row('HQ Location', companyLocation) : '',
+    orgPhone ? row('Company Phone', orgPhone) : '',
     keywords ? row('Keywords', keywords) : '',
     orgWebsite ? row('Website', orgWebsite, orgWebsite) : '',
-    orgLinkedin ? row('Company LinkedIn', 'View', orgLinkedin) : '',
+    orgLinkedin ? row('Company LinkedIn', 'View →', orgLinkedin) : '',
   ].join('')
 
   const employmentRows = employment.length
@@ -185,11 +199,17 @@ export async function sendLeadNotification(
 <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f9fafb;padding:24px;">
   <div style="background:#fff;border-radius:8px;padding:24px;border:1px solid #e5e7eb;">
 
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-      <div style="width:10px;height:10px;border-radius:50%;background:${lead.personaColor};flex-shrink:0;"></div>
-      <h2 style="margin:0;font-size:17px;color:#111827;">New Lead — ${lead.personaName}</h2>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      ${photoUrl ? `<img src="${photoUrl}" alt="${name}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #e5e7eb;">` : `<div style="width:52px;height:52px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">👤</div>`}
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:${lead.personaColor};flex-shrink:0;"></div>
+          <h2 style="margin:0;font-size:17px;color:#111827;">${name}</h2>
+        </div>
+        <p style="margin:0;font-size:12px;color:#6b7280;">${effectiveTitle ? `${effectiveTitle}${effectiveCompany ? ` · ${effectiveCompany}` : ''}` : (effectiveCompany || '')}</p>
+        <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Assigned to <strong>${lead.personaName}</strong> · ${score}</p>
+      </div>
     </div>
-    <p style="margin:0 0 20px;font-size:12px;color:#9ca3af;padding-left:20px;">${score}</p>
 
     ${section('Contact Info', contactRows)}
     ${companyRows.trim() ? section('Company Intelligence', companyRows) : ''}
@@ -214,10 +234,11 @@ export async function sendLeadNotification(
     allPhones.length ? `Phone: ${allPhones.join(', ')}` : '',
     effectiveCompany ? `Company: ${effectiveCompany}` : '',
     effectiveTitle ? `Title: ${effectiveTitle}` : '',
+    departments ? `Department: ${departments}` : '',
     seniority ? `Seniority: ${seniority}` : '',
     personLocation ? `Location: ${personLocation}` : '',
     headline ? `Headline: ${headline}` : '',
-    lead.linkedinUrl ? `LinkedIn: ${lead.linkedinUrl}` : '',
+    effectiveLinkedin ? `LinkedIn: ${effectiveLinkedin}` : '',
     twitterUrl ? `Twitter: ${twitterUrl}` : '',
     '',
     companyRows.trim() ? '--- COMPANY INTELLIGENCE ---' : '',
@@ -227,6 +248,7 @@ export async function sendLeadNotification(
     funding ? `Total Funding: ${funding}` : '',
     founded ? `Founded: ${founded}` : '',
     companyLocation ? `HQ: ${companyLocation}` : '',
+    orgPhone ? `Company Phone: ${orgPhone}` : '',
     keywords ? `Keywords: ${keywords}` : '',
     orgWebsite ? `Website: ${orgWebsite}` : '',
     '',
