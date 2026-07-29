@@ -118,10 +118,10 @@ export async function runEnrichmentPipeline(
   // Resolve LinkedIn URL — from enrichment or original lead
   let linkedinUrl = (ed.linkedin_url as string | undefined) || lead.linkedinUrl || undefined
 
-  // ── Phase 1b: Lusha (LinkedIn required) ──────────────────────────────────
-  if (keys.lusha && linkedinUrl) {
+  // ── Phase 1b: Lusha (LinkedIn URL preferred, email fallback) ─────────────
+  if (keys.lusha && (linkedinUrl || lead.email)) {
     const lushaResult = await lushaEnrichPerson(keys.lusha, {
-      linkedinUrl,
+      linkedinUrl: linkedinUrl || undefined,
       firstName: lead.firstName || undefined,
       lastName: lead.lastName || undefined,
       email: lead.email || undefined,
@@ -138,9 +138,10 @@ export async function runEnrichmentPipeline(
     sources_skipped.push('lusha')
   }
 
-  // ── Phase 2a: PDL (fallback when Apollo found no title/company) ───────────
+  // ── Phase 2a: PDL (fallback when Apollo found no title/company, OR missing phones) ─
   const apolloFoundProfile = !!(ed.title || ed.current_company)
-  if (keys.pdl && !apolloFoundProfile) {
+  const hasPhone = getAllPhones(ed, lead.phone).length > 0
+  if (keys.pdl && (!apolloFoundProfile || !hasPhone)) {
     const pdlResult = await pdlEnrichPerson(keys.pdl, {
       email: lead.email,
       phone: lead.phone,
