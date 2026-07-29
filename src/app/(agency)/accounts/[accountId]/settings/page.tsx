@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import type { AIProvider } from '@/types'
 
 interface ApiKeyEntry {
   id: string
@@ -14,72 +13,46 @@ interface ApiKeyEntry {
   updated_at: string
 }
 
-interface ServiceConfig {
+interface CrmConfig {
   service: string
   label: string
+  isPrimary?: boolean
   description: string
   placeholder: string
   fields?: { name: string; label: string; placeholder: string }[]
 }
 
-const PROVIDER_MODELS: Record<AIProvider, { value: string; label: string }[]> = {
-  gemini: [
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-    { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  ],
-  openai: [
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  ],
-  anthropic: [
-    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-    { value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
-  ],
-  openrouter: [
-    { value: 'openai/gpt-4o', label: 'OpenAI GPT-4o' },
-    { value: 'anthropic/claude-3.5-sonnet', label: 'Anthropic Claude 3.5 Sonnet' },
-    { value: 'google/gemini-flash-1.5', label: 'Google Gemini Flash 1.5' },
-    { value: 'meta-llama/llama-3.1-70b-instruct', label: 'Meta Llama 3.1 70B' },
-  ],
-}
-
-const PROVIDER_OPTIONS: { value: AIProvider; label: string }[] = [
-  { value: 'gemini', label: 'Google Gemini' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic Claude' },
-  { value: 'openrouter', label: 'OpenRouter' },
-]
-
-const PROVIDER_KEY_LABELS: Record<AIProvider, string> = {
-  gemini: 'Gemini API Key',
-  openai: 'OpenAI API Key',
-  anthropic: 'Anthropic API Key',
-  openrouter: 'OpenRouter API Key',
-}
-
-const SERVICE_CONFIGS: ServiceConfig[] = [
-  {
-    service: 'apollo',
-    label: 'Apollo.io',
-    description: 'Used to enrich leads with professional data. Find your key in Apollo Settings > Integrations.',
-    placeholder: 'your-apollo-api-key',
-  },
-  {
-    service: 'lusha',
-    label: 'Lusha (Optional)',
-    description: 'Secondary enrichment after Apollo. Lusha specializes in direct emails and phone numbers — especially useful when leads use alternate emails. Triggered automatically when configured.',
-    placeholder: 'your-lusha-api-key',
-  },
+const CRM_CONFIGS: CrmConfig[] = [
   {
     service: 'highlevel',
-    label: 'Highlevel (GHL)',
-    description: 'Used to trigger workflows for assigned leads. Use your Private Integration API Key.',
-    placeholder: 'your-highlevel-api-key',
-    fields: [{ name: 'location_id', label: 'Location ID', placeholder: 'your-location-id' }],
+    label: 'GoHighLevel',
+    isPrimary: true,
+    description: 'Primary CRM — triggers workflows, updates contact profiles, and writes persona data to custom fields after each lead is enriched.',
+    placeholder: 'your-highlevel-private-integrations-key',
+    fields: [
+      { name: 'location_id', label: 'Location ID', placeholder: 'your-location-id' },
+    ],
+  },
+  {
+    service: 'hubspot',
+    label: 'HubSpot',
+    description: 'Sync enriched contact data and persona assignments to HubSpot CRM. Coming soon — API key stored for future push integration.',
+    placeholder: 'your-hubspot-private-app-token',
+  },
+  {
+    service: 'zoho',
+    label: 'Zoho CRM',
+    description: 'Push enriched contacts and persona tags to Zoho CRM. Coming soon — API key stored for future push integration.',
+    placeholder: 'your-zoho-oauth-token',
+    fields: [
+      { name: 'org_id', label: 'Organization ID (optional)', placeholder: 'your-zoho-org-id' },
+    ],
+  },
+  {
+    service: 'pipedrive',
+    label: 'Pipedrive',
+    description: 'Create or update persons in Pipedrive with enriched data and persona labels. Coming soon — API key stored for future push integration.',
+    placeholder: 'your-pipedrive-api-token',
   },
 ]
 
@@ -103,12 +76,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
 
-  // AI Model state
-  const [aiProvider, setAiProvider] = useState<AIProvider>('gemini')
-  const [aiModel, setAiModel] = useState<string>('gemini-1.5-flash')
-  const [aiApiKey, setAiApiKey] = useState<string>('')
-
-  // Pipelines state
   const [pipelinesList, setPipelinesList] = useState<{ id: string; name: string; slug: string; notification_emails: string[] }[]>([])
   const [newPipelineName, setNewPipelineName] = useState('')
   const [addingPipeline, setAddingPipeline] = useState(false)
@@ -116,7 +83,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [renamePipelineValue, setRenamePipelineValue] = useState('')
   const [pipelineEmailInputs, setPipelineEmailInputs] = useState<Record<string, string>>({})
 
-  // Postmark + global notification emails
   const [postmarkKey, setPostmarkKey] = useState('')
   const [postmarkFrom, setPostmarkFrom] = useState('')
   const [postmarkFromName, setPostmarkFromName] = useState('')
@@ -127,7 +93,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
   const [testingEmail, setTestingEmail] = useState(false)
   const [testEmailResult, setTestEmailResult] = useState<{ ok: boolean; message: string } | null>(null)
 
-  // Bulk persona email state
   const [personasList, setPersonasList] = useState<{ id: string; name: string; notification_emails: string[] }[]>([])
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<Set<string>>(new Set())
   const [bulkEmailInput, setBulkEmailInput] = useState('')
@@ -167,25 +132,15 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           .then((d) => setPersonasList(d.personas || []))
           .catch(() => {})
 
-        // Check if agency AI persona gen is globally configured
         fetch('/api/agency/persona-gen-ai?accountId=' + accountId)
           .then((r) => r.json())
           .then((d) => setPersonaGenAiConfigured(d.configured === true))
           .catch(() => {})
 
-        // Check HL custom fields setup status
         fetch(`/api/accounts/${accountId}/highlevel/setup-fields`)
           .then((r) => r.json())
           .then((d) => { setHlFieldsConfigured(d.configured === true); setHlFieldsCheckDone(true) })
           .catch(() => setHlFieldsCheckDone(true))
-
-        // Pre-populate AI model settings if they exist
-        const aiModelEntry = keys.find((k) => k.service === 'ai_model')
-        if (aiModelEntry?.extra_data) {
-          const ed = aiModelEntry.extra_data as Record<string, string>
-          if (ed.provider) setAiProvider(ed.provider as AIProvider)
-          if (ed.model) setAiModel(ed.model)
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings')
       } finally {
@@ -194,12 +149,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     }
     fetchKeys()
   }, [accountId])
-
-  // When provider changes, reset model to first option
-  const handleProviderChange = (provider: AIProvider) => {
-    setAiProvider(provider)
-    setAiModel(PROVIDER_MODELS[provider][0].value)
-  }
 
   const getExistingKey = (service: string): ApiKeyEntry | undefined =>
     existingKeys.find((k) => k.service === service)
@@ -222,45 +171,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         extra_data: { ...getFormValue(service).extra_data, [field]: value },
       },
     }))
-  }
-
-  const handleSaveAiModel = async () => {
-    if (!aiApiKey.trim()) {
-      setError('Please enter an API key for the selected AI provider')
-      return
-    }
-
-    setSavingService('ai_model')
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const res = await fetch(`/api/accounts/${accountId}/settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          service: 'ai_model',
-          key_value: aiApiKey.trim(),
-          extra_data: { provider: aiProvider, model: aiModel },
-        }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to save')
-      }
-
-      setSuccess('AI model settings saved successfully')
-      setAiApiKey('')
-
-      const refreshRes = await fetch(`/api/accounts/${accountId}/settings`)
-      const refreshData = await refreshRes.json()
-      setExistingKeys(refreshData.apiKeys || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save AI model settings')
-    } finally {
-      setSavingService(null)
-    }
   }
 
   const handleSave = async (service: string) => {
@@ -313,14 +223,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     typeof window !== 'undefined'
       ? `${window.location.origin}/api/webhook/${accountId}/nurture?secret=${webhookSecret}`
       : `https://your-app.com/api/webhook/${accountId}/nurture?secret=${webhookSecret}`
-
-  const handleCopyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl).catch(() => {})
-  }
-
-  const handleCopyNurtureWebhook = () => {
-    navigator.clipboard.writeText(nurtureWebhookUrl).catch(() => {})
-  }
 
   const handleToggleNurture = async (enabled: boolean) => {
     setTogglingNurture(true)
@@ -383,18 +285,36 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
     }
   }
 
-  const existingAiModel = getExistingKey('ai_model')
-
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Configure API keys and webhook for this account.
+          Configure CRM integrations, pipelines, and email notifications for this account.
         </p>
       </div>
 
-      {/* Webhook URLs — all channels in one place */}
+      {/* Agency-managed notice */}
+      <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-lg mb-6">
+        <svg className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <p className="text-sm font-medium text-indigo-800">AI &amp; Enrichment managed at agency level</p>
+          <p className="text-xs text-indigo-600 mt-0.5">
+            AI model, persona assignment, and all enrichment tool keys (Apollo, Lusha, PDL, etc.) are configured in Agency Settings and apply automatically to all sub-accounts.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
+      )}
+      {success && (
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{success}</div>
+      )}
+
+      {/* Webhook URLs */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Webhook URLs</CardTitle>
@@ -404,18 +324,16 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             Paste each URL into the corresponding ad platform or CRM. Each channel has its own personas and lead routing.
           </p>
           <div className="space-y-2">
-            {/* Main (LinkedIn / default) */}
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">LinkedIn / Default (Main)</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 bg-gray-50 border border-gray-200 px-3 py-2 rounded text-xs text-gray-800 font-mono break-all">
                   {webhookUrl}
                 </code>
-                <Button variant="secondary" size="sm" onClick={handleCopyWebhook}>Copy</Button>
+                <Button variant="secondary" size="sm" onClick={() => navigator.clipboard.writeText(webhookUrl).catch(() => {})}>Copy</Button>
               </div>
             </div>
 
-            {/* Additional pipelines */}
             {pipelinesList.filter((p) => p.slug !== 'main').map((p) => (
               <div key={p.slug}>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{p.name}</p>
@@ -434,7 +352,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
               </div>
             ))}
 
-            {/* Nurture (if enabled) */}
             {nurtureEnabled && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nurture (Cold / Limbo Leads)</p>
@@ -442,21 +359,21 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                   <code className="flex-1 bg-indigo-50 border border-indigo-100 px-3 py-2 rounded text-xs text-indigo-800 font-mono break-all">
                     {nurtureWebhookUrl}
                   </code>
-                  <Button variant="secondary" size="sm" onClick={handleCopyNurtureWebhook}>Copy</Button>
+                  <Button variant="secondary" size="sm" onClick={() => navigator.clipboard.writeText(nurtureWebhookUrl).catch(() => {})}>Copy</Button>
                 </div>
               </div>
             )}
 
             {pipelinesList.filter((p) => p.slug !== 'main').length === 0 && (
               <p className="text-xs text-gray-400 italic">
-                Add Facebook Ads, Google Ads, or other pipelines in the Pipelines section below to get their webhook URLs here.
+                Add pipelines below to get their webhook URLs here.
               </p>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-1">Keep these URLs private — the account ID is the secret.</p>
         </CardContent>
       </Card>
 
+      {/* AI Persona Generator toggle */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -490,12 +407,13 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             </p>
           ) : (
             <p className="text-sm text-gray-600">
-              When enabled, users in this account see a <strong>Generate with AI</strong> button inside the persona form. They describe their target audience and the AI writes the description and characteristics automatically.
+              When enabled, users in this account see a <strong>Generate with AI</strong> button inside the persona form.
             </p>
           )}
         </CardContent>
       </Card>
 
+      {/* Nurture Pipeline toggle */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -520,7 +438,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600">
-            Enable a separate pipeline for cold and limbo leads. When enabled, a dedicated menu and webhook become active. Nurture leads have their own personas and workflow routing. The webhook URL appears in the <strong>Webhook URLs</strong> section above.
+            Enable a separate pipeline for cold and limbo leads. A dedicated webhook appears in the Webhook URLs section above.
           </p>
         </CardContent>
       </Card>
@@ -529,152 +447,161 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
       <Card className="mb-6">
         <CardHeader><CardTitle>Pipelines</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600">Manage lead routing pipelines. Each pipeline has its own personas and webhook URL (<code className="text-xs bg-gray-100 px-1 rounded">/api/webhook/{accountId}/[slug]</code>).</p>
-          <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-            {pipelinesList.map((pl) => (
-              <div key={pl.id} className="px-4 py-3 bg-white space-y-3">
-                {renamingPipelineId === pl.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={renamePipelineValue}
-                      onChange={(e) => setRenamePipelineValue(e.target.value)}
-                      className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      autoFocus
-                    />
-                    <button
-                      onClick={async () => {
-                        if (!renamePipelineValue.trim()) return
-                        await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ name: renamePipelineValue.trim() }),
-                        })
-                        setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, name: renamePipelineValue.trim() } : p))
-                        setRenamingPipelineId(null)
-                      }}
-                      className="text-xs text-indigo-600 font-medium hover:underline"
-                    >Save</button>
-                    <button onClick={() => setRenamingPipelineId(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{pl.name}</p>
-                      <p className="text-xs text-gray-400 font-mono">slug: {pl.slug}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => { setRenamingPipelineId(pl.id); setRenamePipelineValue(pl.name) }} className="text-xs text-indigo-600 hover:underline">Rename</button>
-                      {pl.slug !== 'main' && (
+          <p className="text-sm text-gray-600">Manage lead routing pipelines. Each pipeline has its own personas and webhook URL.</p>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <svg className="animate-spin h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
+                {pipelinesList.map((pl) => (
+                  <div key={pl.id} className="px-4 py-3 bg-white space-y-3">
+                    {renamingPipelineId === pl.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={renamePipelineValue}
+                          onChange={(e) => setRenamePipelineValue(e.target.value)}
+                          className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoFocus
+                        />
                         <button
                           onClick={async () => {
-                            if (!confirm(`Delete pipeline "${pl.name}"? This cannot be undone.`)) return
-                            await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, { method: 'DELETE' })
-                            setPipelinesList((prev) => prev.filter((p) => p.id !== pl.id))
+                            if (!renamePipelineValue.trim()) return
+                            await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ name: renamePipelineValue.trim() }),
+                            })
+                            setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, name: renamePipelineValue.trim() } : p))
+                            setRenamingPipelineId(null)
                           }}
-                          className="text-xs text-red-500 hover:underline"
-                        >Delete</button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                          className="text-xs text-indigo-600 font-medium hover:underline"
+                        >Save</button>
+                        <button onClick={() => setRenamingPipelineId(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{pl.name}</p>
+                          <p className="text-xs text-gray-400 font-mono">slug: {pl.slug}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => { setRenamingPipelineId(pl.id); setRenamePipelineValue(pl.name) }} className="text-xs text-indigo-600 hover:underline">Rename</button>
+                          {pl.slug !== 'main' && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Delete pipeline "${pl.name}"? This cannot be undone.`)) return
+                                await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, { method: 'DELETE' })
+                                setPipelinesList((prev) => prev.filter((p) => p.id !== pl.id))
+                              }}
+                              className="text-xs text-red-500 hover:underline"
+                            >Delete</button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
-                {/* Notification emails — always visible inline */}
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Notification Emails</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(pl.notification_emails || []).map((email) => (
-                      <span key={email} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
-                        {email}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Notification Emails</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(pl.notification_emails || []).map((email) => (
+                          <span key={email} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+                            {email}
+                            <button
+                              onClick={async () => {
+                                const updated = (pl.notification_emails || []).filter((e) => e !== email)
+                                await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ notification_emails: updated }),
+                                })
+                                setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
+                              }}
+                              className="text-indigo-400 hover:text-red-500 ml-0.5"
+                            >×</button>
+                          </span>
+                        ))}
+                        {(pl.notification_emails || []).length === 0 && (
+                          <p className="text-xs text-gray-400 italic">No emails yet</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={pipelineEmailInputs[pl.id] || ''}
+                          onChange={(e) => setPipelineEmailInputs((prev) => ({ ...prev, [pl.id]: e.target.value }))}
+                          placeholder="email@example.com"
+                          className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          onKeyDown={async (e) => {
+                            const val = pipelineEmailInputs[pl.id] || ''
+                            if (e.key === 'Enter' && val.trim()) {
+                              const updated = [...(pl.notification_emails || []), val.trim()]
+                              await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notification_emails: updated }),
+                              })
+                              setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
+                              setPipelineEmailInputs((prev) => ({ ...prev, [pl.id]: '' }))
+                            }
+                          }}
+                        />
                         <button
                           onClick={async () => {
-                            const updated = (pl.notification_emails || []).filter((e) => e !== email)
+                            const val = pipelineEmailInputs[pl.id] || ''
+                            if (!val.trim()) return
+                            const updated = [...(pl.notification_emails || []), val.trim()]
                             await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
                               method: 'PUT',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ notification_emails: updated }),
                             })
                             setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
+                            setPipelineEmailInputs((prev) => ({ ...prev, [pl.id]: '' }))
                           }}
-                          className="text-indigo-400 hover:text-red-500 ml-0.5"
-                        >×</button>
-                      </span>
-                    ))}
-                    {(pl.notification_emails || []).length === 0 && (
-                      <p className="text-xs text-gray-400 italic">No emails yet — add one below</p>
-                    )}
+                          className="text-xs text-indigo-600 font-medium border border-indigo-300 rounded px-3 py-1 hover:bg-indigo-50"
+                        >Add</button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={pipelineEmailInputs[pl.id] || ''}
-                      onChange={(e) => setPipelineEmailInputs((prev) => ({ ...prev, [pl.id]: e.target.value }))}
-                      placeholder="email@example.com"
-                      className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      onKeyDown={async (e) => {
-                        const val = pipelineEmailInputs[pl.id] || ''
-                        if (e.key === 'Enter' && val.trim()) {
-                          const updated = [...(pl.notification_emails || []), val.trim()]
-                          await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ notification_emails: updated }),
-                          })
-                          setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
-                          setPipelineEmailInputs((prev) => ({ ...prev, [pl.id]: '' }))
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={async () => {
-                        const val = pipelineEmailInputs[pl.id] || ''
-                        if (!val.trim()) return
-                        const updated = [...(pl.notification_emails || []), val.trim()]
-                        await fetch(`/api/accounts/${accountId}/pipelines/${pl.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ notification_emails: updated }),
-                        })
-                        setPipelinesList((prev) => prev.map((p) => p.id === pl.id ? { ...p, notification_emails: updated } : p))
-                        setPipelineEmailInputs((prev) => ({ ...prev, [pl.id]: '' }))
-                      }}
-                      className="text-xs text-indigo-600 font-medium border border-indigo-300 rounded px-3 py-1 hover:bg-indigo-50"
-                    >Add</button>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              value={newPipelineName}
-              onChange={(e) => setNewPipelineName(e.target.value)}
-              placeholder="New pipeline name…"
-              className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.form?.requestSubmit() }}
-            />
-            <Button
-              size="sm"
-              isLoading={addingPipeline}
-              onClick={async () => {
-                if (!newPipelineName.trim()) return
-                setAddingPipeline(true)
-                try {
-                  const res = await fetch(`/api/accounts/${accountId}/pipelines`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: newPipelineName.trim() }),
-                  })
-                  const d = await res.json()
-                  if (d.pipeline) { setPipelinesList((prev) => [...prev, d.pipeline]); setNewPipelineName('') }
-                  else setError(d.error || 'Failed to create pipeline')
-                } finally {
-                  setAddingPipeline(false)
-                }
-              }}
-            >
-              Add Pipeline
-            </Button>
-          </div>
+              <div className="flex gap-2">
+                <input
+                  value={newPipelineName}
+                  onChange={(e) => setNewPipelineName(e.target.value)}
+                  placeholder="New pipeline name…"
+                  className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <Button
+                  size="sm"
+                  isLoading={addingPipeline}
+                  onClick={async () => {
+                    if (!newPipelineName.trim()) return
+                    setAddingPipeline(true)
+                    try {
+                      const res = await fetch(`/api/accounts/${accountId}/pipelines`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: newPipelineName.trim() }),
+                      })
+                      const d = await res.json()
+                      if (d.pipeline) { setPipelinesList((prev) => [...prev, d.pipeline]); setNewPipelineName('') }
+                      else setError(d.error || 'Failed to create pipeline')
+                    } finally {
+                      setAddingPipeline(false)
+                    }
+                  }}
+                >
+                  Add Pipeline
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -831,13 +758,10 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             )}
           </div>
 
-          {/* Bulk persona email assignment */}
           {personasList.length > 0 && (
             <div className="space-y-3 border-t border-gray-100 pt-4">
               <p className="text-sm font-medium text-gray-700">Bulk Persona Notification Emails</p>
               <p className="text-xs text-gray-500">Select personas and add emails to all of them at once.</p>
-
-              {/* Persona list */}
               <div className="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-56 overflow-y-auto">
                 <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100">
                   <input
@@ -873,8 +797,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                   </label>
                 ))}
               </div>
-
-              {/* Email input */}
               <div className="flex gap-2">
                 <input
                   type="email"
@@ -907,7 +829,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                   ))}
                 </div>
               )}
-
               <Button
                 size="sm"
                 isLoading={applyingBulk}
@@ -925,7 +846,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                         body: JSON.stringify({ ...p, notification_emails: merged }),
                       })
                     }))
-                    // Refresh personas list
                     const refreshed = await fetch(`/api/accounts/${accountId}/personas`).then((r) => r.json())
                     setPersonasList(refreshed.personas || [])
                     setSelectedPersonaIds(new Set())
@@ -958,9 +878,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             </div>
             {hlFieldsCheckDone && (
               <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
-                hlFieldsConfigured
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-500'
+                hlFieldsConfigured ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               }`}>
                 {hlFieldsConfigured ? 'Fields configured' : 'Not set up'}
               </span>
@@ -971,11 +889,11 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           <div className="text-sm text-gray-600 space-y-1.5">
             <p className="flex items-start gap-2">
               <span className="text-green-500 mt-0.5">✓</span>
-              <span><strong>Tags</strong> — persona name added as a tag automatically (no setup needed)</span>
+              <span><strong>Tags</strong> — persona name added as a tag automatically</span>
             </p>
             <p className="flex items-start gap-2">
               <span className="text-green-500 mt-0.5">✓</span>
-              <span><strong>Notes</strong> — AI reasoning posted as a contact note automatically (no setup needed)</span>
+              <span><strong>Notes</strong> — AI reasoning posted as a contact note automatically</span>
             </p>
             <p className="flex items-start gap-2">
               <span className={hlFieldsConfigured ? 'text-green-500 mt-0.5' : 'text-gray-400 mt-0.5'}>
@@ -999,127 +917,33 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                 Setup HL Custom Fields
               </Button>
               {!getExistingKey('highlevel') && (
-                <p className="text-xs text-amber-600 mt-1">Save your Highlevel API key below first.</p>
+                <p className="text-xs text-amber-600 mt-1">Save your GoHighLevel API key in CRM Integrations below first.</p>
               )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-          {success}
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <svg className="animate-spin h-8 w-8 text-indigo-500" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        </div>
-      ) : (
+      {/* CRM Integrations */}
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 mb-3">CRM Integrations</h2>
         <div className="space-y-4">
-          {/* AI Model Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>AI Model</CardTitle>
-                {existingAiModel && (
-                  <div className="flex items-center gap-1.5 text-xs text-green-600">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Configured
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-gray-500">
-                Select the AI provider and model used for lead analysis and persona assignment.
-              </p>
-
-              {existingAiModel && (
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-gray-500">Current:</span>
-                  <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-700">
-                    {String(existingAiModel.extra_data?.provider || 'gemini')} / {String(existingAiModel.extra_data?.model || 'gemini-1.5-flash')}
-                  </code>
-                  <span className="text-xs text-gray-400">
-                    Updated {new Date(existingAiModel.updated_at).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-
-              <div className="space-y-3 pt-1">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
-                  <select
-                    value={aiProvider}
-                    onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {PROVIDER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-                  <select
-                    value={aiModel}
-                    onChange={(e) => setAiModel(e.target.value)}
-                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {PROVIDER_MODELS[aiProvider].map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <Input
-                  label={existingAiModel ? `Update ${PROVIDER_KEY_LABELS[aiProvider]}` : PROVIDER_KEY_LABELS[aiProvider]}
-                  type="password"
-                  value={aiApiKey}
-                  onChange={(e) => setAiApiKey(e.target.value)}
-                  placeholder="Enter your API key"
-                />
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <Button
-                  onClick={handleSaveAiModel}
-                  isLoading={savingService === 'ai_model'}
-                  size="sm"
-                >
-                  {existingAiModel ? 'Update AI Settings' : 'Save AI Settings'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Apollo and Highlevel sections */}
-          {SERVICE_CONFIGS.map((config) => {
+          {CRM_CONFIGS.map((config) => {
             const existing = getExistingKey(config.service)
             const formVal = getFormValue(config.service)
 
             return (
               <Card key={config.service}>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>{config.label}</CardTitle>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <CardTitle>{config.label}</CardTitle>
+                      {config.isPrimary && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white uppercase tracking-wide">
+                          Primary
+                        </span>
+                      )}
+                    </div>
                     {existing && (
                       <div className="flex items-center gap-1.5 text-xs text-green-600">
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -1132,7 +956,6 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-sm text-gray-500">{config.description}</p>
-
                   {existing && (
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-500">Current key:</span>
@@ -1144,18 +967,15 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                       </span>
                     </div>
                   )}
-
-                  {existing?.extra_data && (
-                    <div className="text-sm">
-                      <span className="text-gray-500">Extra data:</span>
+                  {existing?.extra_data && Object.keys(existing.extra_data).length > 0 && (
+                    <div className="text-sm flex flex-wrap gap-2">
                       {Object.entries(existing.extra_data).map(([k, v]) => (
-                        <span key={k} className="ml-2 text-gray-700">
-                          {k}: <code className="bg-gray-100 px-1 rounded text-xs">{String(v)}</code>
+                        <span key={k} className="text-gray-500">
+                          {k}: <code className="bg-gray-100 px-1 rounded text-xs text-gray-700">{String(v)}</code>
                         </span>
                       ))}
                     </div>
                   )}
-
                   <div className="space-y-2 pt-1">
                     <Input
                       label={existing ? 'Update API Key' : 'API Key'}
@@ -1164,20 +984,16 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
                       onChange={(e) => handleKeyChange(config.service, e.target.value)}
                       placeholder={config.placeholder}
                     />
-
                     {config.fields?.map((field) => (
                       <Input
                         key={field.name}
                         label={field.label}
                         value={formVal.extra_data[field.name] || ''}
-                        onChange={(e) =>
-                          handleExtraDataChange(config.service, field.name, e.target.value)
-                        }
+                        onChange={(e) => handleExtraDataChange(config.service, field.name, e.target.value)}
                         placeholder={field.placeholder}
                       />
                     ))}
                   </div>
-
                   <div className="flex justify-end pt-1">
                     <Button
                       onClick={() => handleSave(config.service)}
@@ -1192,7 +1008,7 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             )
           })}
         </div>
-      )}
+      </div>
     </div>
   )
 }
