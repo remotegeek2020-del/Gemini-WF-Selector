@@ -308,10 +308,25 @@ const SHARED_CSS = `
   }
   .pl-tool {
     background: var(--surface2); border: 1px solid var(--border-soft);
-    border-radius: 8px; padding: 10px 12px;
+    border-radius: 8px; padding: 12px 14px;
   }
-  .pl-tool-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
-  .pl-tool-desc { font-size: 10.5px; color: var(--text-muted); line-height: 1.45; }
+  .pl-tool-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .pl-tool-strength { font-size: 10px; color: var(--text-dim); font-style: italic; margin-bottom: 8px; line-height: 1.4; }
+  .pl-tool-divider { height: 1px; background: var(--border-soft); margin: 8px 0; }
+  .pl-tool-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 5px; }
+  .pl-tool-row:last-child { margin-bottom: 0; }
+  .pl-tool-row-label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    flex-shrink: 0; padding-top: 1px; width: 52px;
+  }
+  .pl-tool-row-val { font-size: 10.5px; color: var(--text-muted); line-height: 1.5; }
+  .pl-tool-row-val strong { color: var(--text); font-weight: 600; }
+  .pl-tool-offset {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+    background: var(--surface); border: 1px solid var(--border-soft);
+    color: var(--text-dim); margin-right: 4px; margin-bottom: 3px;
+  }
   .pl-tool-tag {
     display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
     text-transform: uppercase; padding: 2px 6px; border-radius: 4px;
@@ -490,6 +505,33 @@ const SHARED_CSS = `
   }
 `
 
+function Tool({ name, strength, needs, outputs, offset }: {
+  name: string
+  strength: string
+  needs: string
+  outputs: string[]
+  offset?: string
+}) {
+  return (
+    <div className="pl-tool">
+      <div className="pl-tool-name">{name}</div>
+      <div className="pl-tool-strength">{strength}</div>
+      <div className="pl-tool-divider" />
+      <div className="pl-tool-row">
+        <span className="pl-tool-row-label" style={{ color: 'var(--phase2)' }}>Needs</span>
+        <span className="pl-tool-row-val">
+          {offset && <span className="pl-tool-offset">↑ {offset}</span>}
+          {needs}
+        </span>
+      </div>
+      <div className="pl-tool-row">
+        <span className="pl-tool-row-label" style={{ color: 'var(--phase4)' }}>Returns</span>
+        <span className="pl-tool-row-val">{outputs.join(' · ')}</span>
+      </div>
+    </div>
+  )
+}
+
 function WaterfallTab() {
   return (
     <>
@@ -500,7 +542,7 @@ function WaterfallTab() {
         </div>
         <h1 className="pl-h1">Lead Enrichment Waterfall</h1>
         <p className="pl-subtitle">
-          A sequential, credit-efficient pipeline that enriches each inbound lead through up to 12 data sources — activating only the tools whose API keys are configured.
+          A sequential, credit-efficient pipeline that enriches each inbound lead through up to 12 data sources. Each tool receives signals discovered by the tools above it — and only activates when its API key is configured.
         </p>
         <div className="pl-legend">
           {[
@@ -542,73 +584,100 @@ function WaterfallTab() {
 
         <div className="pl-connector"><div className="pl-arrow" /></div>
 
+        {/* Phase 1 */}
         <div className="pl-phase p1">
           <div className="pl-phase-header">
             <span className="pl-phase-badge">Phase 1</span>
             <span className="pl-phase-title">Primary Enrichment</span>
-            <span className="pl-phase-meta">Always runs</span>
+            <span className="pl-phase-meta">Always runs · seeds all downstream tools</span>
           </div>
           <div className="pl-phase-body">
-            <div className="pl-skip">Apollo always runs first. Lusha runs only when Apollo returns a LinkedIn URL.</div>
+            <div className="pl-skip">Apollo always runs first and seeds every downstream phase with LinkedIn URL, company, and title. Lusha runs immediately after using Apollo&apos;s LinkedIn URL — or falls back to email if no URL found.</div>
             <div className="pl-tools">
-              <div className="pl-tool">
-                <div className="pl-tool-name">Apollo.io</div>
-                <div className="pl-tool-desc">Title, company, industry, employment history, LinkedIn URL, company size &amp; revenue</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Lusha</div>
-                <div className="pl-tool-desc">Direct dials and personal emails — runs when a LinkedIn URL is available</div>
-              </div>
+              <Tool
+                name="Apollo.io"
+                strength="275M+ B2B profiles · best first-pass for professional identity"
+                needs="Email address, or first + last name (any single signal works)"
+                outputs={['Job title', 'Company name', 'Industry', 'Seniority level', 'Departments', 'LinkedIn URL ★', 'Work phone(s)', 'Work email', 'Employment history', 'Company size', 'Revenue', 'Funding', 'HQ location', 'Social profiles', 'Company keywords', 'Headshot URL']}
+              />
+              <Tool
+                name="Lusha"
+                strength="Best-in-class for direct dials and personal mobile numbers"
+                needs="LinkedIn URL (preferred) or email address"
+                offset="LinkedIn URL from Apollo"
+                outputs={['Direct mobile numbers', 'Personal direct emails', 'Current title', 'Current company']}
+              />
+            </div>
+            <div className="pl-waterfall-note">
+              <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Apollo&apos;s LinkedIn URL is the most valuable Phase 1 output — it unlocks Lusha, Datagma, Kaspr, ContactOut, and Findymail downstream
             </div>
           </div>
         </div>
 
         <div className="pl-connector"><div className="pl-arrow" /></div>
 
+        {/* Phase 2 */}
         <div className="pl-phase p2">
           <div className="pl-phase-header">
             <span className="pl-phase-badge">Phase 2</span>
             <span className="pl-phase-title">Profile Fallback</span>
-            <span className="pl-phase-meta">Conditional</span>
+            <span className="pl-phase-meta">Conditional — fills gaps Apollo missed</span>
           </div>
           <div className="pl-phase-body">
-            <div className="pl-skip">PDL fires only when Apollo found no job title AND no company. Datagma fires when a LinkedIn URL is available. Both are skipped if Phase 1 returned a full profile.</div>
+            <div className="pl-skip">PDL runs when Apollo found no title or company, OR when no phone has been found yet — strong for SMBs and 1099 workers Apollo under-indexes. Datagma runs independently when a LinkedIn URL is available from Phase 1.</div>
             <div className="pl-tools">
-              <div className="pl-tool">
-                <div className="pl-tool-name">People Data Labs</div>
-                <div className="pl-tool-desc">Large dataset fallback — strong coverage for SMBs, independent agents, and 1099 reps</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Datagma</div>
-                <div className="pl-tool-desc">LinkedIn profile enrichment + mobile phone finder from LinkedIn URL</div>
-              </div>
+              <Tool
+                name="People Data Labs"
+                strength="1.5B+ profiles · strongest coverage for SMBs, independents, and gig workers"
+                needs="Email, phone, name, or LinkedIn URL — any single signal"
+                offset="Any signals from Apollo"
+                outputs={['Job title', 'Company name', 'LinkedIn URL', 'Phone numbers', 'Email variants', 'Industry', 'Location', 'Inferred salary range', 'Full employment history']}
+              />
+              <Tool
+                name="Datagma"
+                strength="LinkedIn-native — extracts mobile phones directly from LinkedIn profiles"
+                needs="LinkedIn URL (required)"
+                offset="LinkedIn URL from Apollo or PDL"
+                outputs={['Mobile phone number', 'Work email', 'Job title', 'Company', 'Full LinkedIn profile data']}
+              />
             </div>
           </div>
         </div>
 
         <div className="pl-connector"><div className="pl-arrow" /></div>
 
+        {/* Phase 3 */}
         <div className="pl-phase p3">
           <div className="pl-phase-header">
             <span className="pl-phase-badge">Phase 3</span>
             <span className="pl-phase-title">Phone Recovery</span>
-            <span className="pl-phase-meta">Stops on first match</span>
+            <span className="pl-phase-meta">Stops on first match — skipped if phone already found</span>
           </div>
           <div className="pl-phase-body">
-            <div className="pl-skip">Entire phase skipped if a phone number is already found. Tools run in order — once a phone is returned, the remaining tools in this phase are skipped.</div>
+            <div className="pl-skip">Entire phase skipped if any phone was found in Phases 1–2. Tools run in order — the moment a phone is returned, remaining tools skip. Each tool consumes signals (name, company, LinkedIn) accumulated from all phases above.</div>
             <div className="pl-tools">
-              <div className="pl-tool">
-                <div className="pl-tool-name">BetterContact</div>
-                <div className="pl-tool-desc">Aggregates 15+ phone sources — highest coverage, runs first</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Kaspr</div>
-                <div className="pl-tool-desc">LinkedIn-sourced mobile numbers — runs if phone still missing</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Cognism</div>
-                <div className="pl-tool-desc">B2B mobile + email finder — last resort phone recovery</div>
-              </div>
+              <Tool
+                name="BetterContact"
+                strength="Aggregates 15+ phone data sources in a single call — highest overall coverage"
+                needs="Email + name, or name + company, or LinkedIn URL"
+                offset="Name, email, company from Phases 1–2; LinkedIn URL if found"
+                outputs={['Verified mobile numbers', 'Verified work direct dials']}
+              />
+              <Tool
+                name="Kaspr"
+                strength="Specialized in LinkedIn-sourced mobiles — strong European + North American coverage"
+                needs="LinkedIn URL (required)"
+                offset="LinkedIn URL from Apollo / PDL / Datagma"
+                outputs={['Direct mobile number', 'Work phone']}
+              />
+              <Tool
+                name="Cognism"
+                strength="GDPR-compliant B2B data · strongest UK and EMEA phone coverage"
+                needs="Email, or name + company name"
+                offset="Name, email, company from Phases 1–2"
+                outputs={['Mobile phone', 'Direct work phone', 'Work email (sometimes)']}
+              />
             </div>
             <div className="pl-waterfall-note">
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -619,31 +688,44 @@ function WaterfallTab() {
 
         <div className="pl-connector"><div className="pl-arrow" /></div>
 
+        {/* Phase 4 */}
         <div className="pl-phase p4">
           <div className="pl-phase-header">
             <span className="pl-phase-badge">Phase 4</span>
             <span className="pl-phase-title">Email Recovery</span>
-            <span className="pl-phase-meta">Stops on first match</span>
+            <span className="pl-phase-meta">Stops on first match — skipped if work email already found</span>
           </div>
           <div className="pl-phase-body">
-            <div className="pl-skip">Entire phase skipped if a work email is already found. Targets leads who opted in with a personal Gmail or Yahoo address. Tools run in order — first work email found stops the chain.</div>
+            <div className="pl-skip">Targets leads who opted in with a personal Gmail or Yahoo. Skipped if a work email was already found in Phases 1–2. Tools run in order — the first work email found stops the chain. Hunter and Dropcontact derive the company domain from Apollo&apos;s org data.</div>
             <div className="pl-tools">
-              <div className="pl-tool">
-                <div className="pl-tool-name">ContactOut</div>
-                <div className="pl-tool-desc">Work + personal email from LinkedIn URL — runs first</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Hunter.io</div>
-                <div className="pl-tool-desc">Work email by company domain — runs when domain is known</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Dropcontact</div>
-                <div className="pl-tool-desc">Work email by name + company — GDPR-safe, runs after Hunter</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Findymail</div>
-                <div className="pl-tool-desc">Email via LinkedIn URL or name + domain — final fallback</div>
-              </div>
+              <Tool
+                name="ContactOut"
+                strength="Aggregates emails from multiple sources — good mix of work and personal coverage"
+                needs="LinkedIn URL (required)"
+                offset="LinkedIn URL from Apollo / PDL / Datagma"
+                outputs={['Work email address', 'Personal email address', 'Confidence score per email']}
+              />
+              <Tool
+                name="Hunter.io"
+                strength="Pattern-matches company email formats — very reliable for corporate domains"
+                needs="Company domain (derived from email domain or company website)"
+                offset="Company website / domain from Apollo org data"
+                outputs={['Work email (name + domain pattern match)', 'Domain email format', 'Email confidence score']}
+              />
+              <Tool
+                name="Dropcontact"
+                strength="GDPR-native (built in France) — generates and verifies work emails from name + company"
+                needs="First name + last name + company name"
+                offset="Full name and company from Phases 1–2"
+                outputs={['Verified work email', 'Phone (occasionally)', 'GDPR-compliant sourcing']}
+              />
+              <Tool
+                name="Findymail"
+                strength="High deliverability focus — finds emails that pass SMTP verification before returning"
+                needs="LinkedIn URL, or name + company domain"
+                offset="LinkedIn URL or name + company from Phases 1–2"
+                outputs={['Verified work email (SMTP-checked before returning)']}
+              />
             </div>
             <div className="pl-waterfall-note">
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -654,41 +736,53 @@ function WaterfallTab() {
 
         <div className="pl-connector"><div className="pl-arrow" /></div>
 
+        {/* Phase 5 */}
         <div className="pl-phase p5">
           <div className="pl-phase-header">
             <span className="pl-phase-badge">Phase 5</span>
             <span className="pl-phase-title">Email Verification</span>
-            <span className="pl-phase-meta">~$0.001 per email</span>
+            <span className="pl-phase-meta">Always runs · ~$0.001 per email</span>
           </div>
           <div className="pl-phase-body">
-            <div className="pl-skip">Runs on all collected emails from every phase. Marks each as valid, risky, or undeliverable before the lead record is saved.</div>
+            <div className="pl-skip">Runs on every email address collected across all phases — the original opt-in email, Lusha direct emails, PDL email variants, ContactOut results, and recovered work emails. Catches catch-all servers that accept anything without actually delivering.</div>
             <div className="pl-tools">
-              <div className="pl-tool">
-                <div className="pl-tool-name">Enrow</div>
-                <div className="pl-tool-desc">Deliverability verification for all collected emails — returns validity scores and filters undeliverables</div>
-              </div>
+              <Tool
+                name="Enrow"
+                strength="Real-time SMTP verification — distinguishes real inboxes from catch-all domains"
+                needs="Any email addresses collected from Phases 1–4"
+                offset="All emails from Apollo, Lusha, PDL, ContactOut, Hunter, Dropcontact, Findymail"
+                outputs={['Valid / Risky / Undeliverable status per email', 'Catch-all detection', 'Verified emails list', 'Deliverability confidence score']}
+              />
             </div>
           </div>
         </div>
 
         <div className="pl-connector"><div className="pl-arrow" /></div>
 
+        {/* AI Phase */}
         <div className="pl-phase pai">
           <div className="pl-phase-header">
             <span className="pl-phase-badge">AI Analysis</span>
             <span className="pl-phase-title">Persona Assignment &amp; Lead Scoring</span>
-            <span className="pl-phase-meta">Runs after all enrichment</span>
+            <span className="pl-phase-meta">Reads full enriched profile from all phases above</span>
           </div>
           <div className="pl-phase-body">
+            <div className="pl-skip">Receives the complete merged profile — every field collected across all 5 phases — and makes two AI decisions: which persona this person best matches, and whether they qualify as a hot lead worth immediate follow-up.</div>
             <div className="pl-tools">
-              <div className="pl-tool">
-                <div className="pl-tool-name">Persona Matching</div>
-                <div className="pl-tool-desc">AI reads the full enriched profile and assigns the best-matching persona using title, industry, company type, and experience level</div>
-              </div>
-              <div className="pl-tool">
-                <div className="pl-tool-name">Hot Lead Scoring</div>
-                <div className="pl-tool-desc">Lightweight AI assessment flags high-priority leads based on seniority, company fit, and profile completeness</div>
-              </div>
+              <Tool
+                name="Persona Matching"
+                strength="Understands nuanced professional context — title alone is rarely enough"
+                needs="Full enriched profile: title, company type, industry, seniority, employment history, location"
+                offset="Everything collected across Phases 1–5"
+                outputs={['Assigned persona', 'Match reasoning', 'Confidence explanation', 'Default fallback if no match']}
+              />
+              <Tool
+                name="Hot Lead Scoring"
+                strength="Flags leads worth immediate attention before the team sees the notification"
+                needs="Enriched profile + assigned persona context"
+                offset="Persona assignment result + full enriched data"
+                outputs={['Hot / Not hot flag', 'Scoring reasoning', '🔥 badge in dashboard and email']}
+              />
             </div>
             <div className="pl-waterfall-note">
               <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
@@ -703,10 +797,10 @@ function WaterfallTab() {
           <div className="pl-output-title">Output — Actions Triggered</div>
           <div className="pl-output-grid">
             {[
-              { icon: '📋', label: 'Lead Record', sub: 'Full enriched data + persona + score stored in database' },
+              { icon: '📋', label: 'Lead Record', sub: 'Full enriched data + sources used/skipped + persona + score stored in database' },
               { icon: '⚙️', label: 'GHL Workflow', sub: "Assigned persona's workflow triggered in GoHighLevel" },
               { icon: '👤', label: 'Contact Updated', sub: 'Enriched name, title, company, phone pushed back to GHL contact' },
-              { icon: '✉️', label: 'Email Alert', sub: 'Team notified with persona match, hot flag, and reasoning' },
+              { icon: '✉️', label: 'Email Alert', sub: 'Notification with per-tool waterfall breakdown showing what each source contributed' },
             ].map((item) => (
               <div key={item.label} className="pl-output-item">
                 <div className="pl-output-icon">{item.icon}</div>
@@ -728,7 +822,7 @@ function WaterfallTab() {
 
       <div className="pl-footnote">
         All enrichment tools are opt-in — a tool only runs when its API key is saved in Agency Settings.<br />
-        No key configured = tool skipped = no cost incurred.
+        No key configured = tool skipped = no cost incurred. Each tool&apos;s &quot;Needs&quot; section shows exactly which upstream signals it consumes.
       </div>
     </>
   )
