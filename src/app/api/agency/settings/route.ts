@@ -70,8 +70,18 @@ export async function POST(request: NextRequest) {
   const upserts: { key: string; value: unknown }[] = []
 
   if (email_config) upserts.push({ key: 'email_config', value: email_config })
-  if (persona_gen_ai !== undefined) upserts.push({ key: 'persona_gen_ai', value: persona_gen_ai })
-  if (enrichment_ai !== undefined) upserts.push({ key: 'enrichment_ai', value: enrichment_ai })
+
+  // For AI configs: merge with existing so that omitting api_key preserves the stored key
+  if (persona_gen_ai !== undefined) {
+    const { data: existingPga } = await admin.from('agency_settings').select('value').eq('key', 'persona_gen_ai').single()
+    const merged = { ...((existingPga?.value as Record<string, unknown>) || {}), ...(persona_gen_ai as Record<string, unknown>) }
+    upserts.push({ key: 'persona_gen_ai', value: merged })
+  }
+  if (enrichment_ai !== undefined) {
+    const { data: existingEai } = await admin.from('agency_settings').select('value').eq('key', 'enrichment_ai').single()
+    const merged = { ...((existingEai?.value as Record<string, unknown>) || {}), ...(enrichment_ai as Record<string, unknown>) }
+    upserts.push({ key: 'enrichment_ai', value: merged })
+  }
 
   // Merge partial enrichment_keys into existing blob
   if (enrichment_keys && Object.keys(enrichment_keys).length > 0) {

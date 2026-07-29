@@ -209,6 +209,7 @@ export default function AgencySettingsPage() {
   const [aiModel, setAiModel] = useState('gemini-2.5-flash')
   const [aiApiKey, setAiApiKey] = useState('')
   const [aiConfigured, setAiConfigured] = useState(false)
+  const [pgaStoredKeyPrefix, setPgaStoredKeyPrefix] = useState('')
   const [isSavingAi, setIsSavingAi] = useState(false)
 
   // Enrichment AI state
@@ -216,6 +217,7 @@ export default function AgencySettingsPage() {
   const [enrichAiModel, setEnrichAiModel] = useState('gemini-2.5-flash')
   const [enrichAiKey, setEnrichAiKey] = useState('')
   const [enrichAiConfigured, setEnrichAiConfigured] = useState(false)
+  const [enrichAiStoredKeyPrefix, setEnrichAiStoredKeyPrefix] = useState('')
   const [isSavingEnrichAi, setIsSavingEnrichAi] = useState(false)
 
   // Enrichment tools state — key per service, saving state
@@ -334,6 +336,7 @@ export default function AgencySettingsPage() {
           setAiProvider(aiCfg.provider || 'gemini')
           setAiModel(aiCfg.model || 'gemini-2.5-flash')
           setAiConfigured(!!aiCfg.api_key)
+          if (aiCfg.api_key) setPgaStoredKeyPrefix(aiCfg.api_key.substring(0, 8))
         }
 
         const enrichAiCfg = data.settings?.enrichment_ai as EnrichmentAI | undefined
@@ -341,6 +344,7 @@ export default function AgencySettingsPage() {
           setEnrichAiProvider(enrichAiCfg.provider || 'gemini')
           setEnrichAiModel(enrichAiCfg.model || 'gemini-2.5-flash')
           setEnrichAiConfigured(!!enrichAiCfg.api_key)
+          if (enrichAiCfg.api_key) setEnrichAiStoredKeyPrefix(enrichAiCfg.api_key.substring(0, 8))
         }
 
         const keys = data.settings?.enrichment_keys as Record<string, string> | undefined
@@ -410,6 +414,7 @@ export default function AgencySettingsPage() {
         throw new Error(data.error || 'Failed to save')
       }
       setAiConfigured(true)
+      if (aiApiKey.trim()) setPgaStoredKeyPrefix(aiApiKey.trim().substring(0, 8))
       setAiApiKey('')
       setSuccessMsg('AI Persona Generator settings saved.')
     } catch (err) {
@@ -441,6 +446,7 @@ export default function AgencySettingsPage() {
         throw new Error(data.error || 'Failed to save')
       }
       setEnrichAiConfigured(true)
+      if (enrichAiKey.trim()) setEnrichAiStoredKeyPrefix(enrichAiKey.trim().substring(0, 8))
       setEnrichAiKey('')
       setSuccessMsg('Enrichment AI settings saved.')
     } catch (err) {
@@ -534,11 +540,16 @@ export default function AgencySettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {enrichAiConfigured && (
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
                     <span className="text-gray-500">Current:</span>
                     <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-700">
                       {enrichAiProvider} / {enrichAiModel}
                     </code>
+                    {enrichAiStoredKeyPrefix && (
+                      <code className="bg-green-50 border border-green-200 px-2 py-0.5 rounded text-xs font-mono text-green-700">
+                        {enrichAiStoredKeyPrefix}••••••••
+                      </code>
+                    )}
                   </div>
                 )}
                 <div className="space-y-3 pt-1 border-t border-gray-100">
@@ -621,12 +632,17 @@ export default function AgencySettingsPage() {
                             <p className="text-xs text-gray-500 mt-1">{config.description}</p>
                           </div>
                         </div>
+                        {hasKey && (
+                          <div className="text-xs text-gray-500">
+                            Saved key: <code className="font-mono text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">{enrichmentKeys[config.service].substring(0, 8)}••••••••</code>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <input
                             type="password"
                             value={inputVal}
                             onChange={(e) => setEnrichmentInputs((prev) => ({ ...prev, [config.service]: e.target.value }))}
-                            placeholder={hasKey ? 'Leave blank to keep existing key' : config.placeholder}
+                            placeholder={hasKey ? 'Enter new key to update' : config.placeholder}
                             className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                           />
                           <Button
@@ -655,11 +671,16 @@ export default function AgencySettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {aiConfigured && (
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
                     <span className="text-gray-500">Current:</span>
                     <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-700">
                       {aiProvider} / {aiModel}
                     </code>
+                    {pgaStoredKeyPrefix && (
+                      <code className="bg-green-50 border border-green-200 px-2 py-0.5 rounded text-xs font-mono text-green-700">
+                        {pgaStoredKeyPrefix}••••••••
+                      </code>
+                    )}
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Configured</span>
                   </div>
                 )}
