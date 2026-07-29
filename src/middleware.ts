@@ -14,6 +14,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Public pipeline flowchart page
+  if (pathname === '/pipeline') {
+    return NextResponse.next()
+  }
+
   // Allow account setup via invite token (page + the two APIs it calls)
   if (
     pathname === '/setup' ||
