@@ -116,6 +116,123 @@ export function buildLeadSummary(lead: LeadData): string {
 Please enrich this lead using Apollo and then assign them to a persona.`
 }
 
+export function buildPersonaAssignmentPrompt(
+  lead: LeadData,
+  enrichedData: Record<string, unknown>,
+  personas: Persona[]
+): string {
+  const apolloRaw = (enrichedData.apollo_raw || {}) as Record<string, unknown>
+  const org = (apolloRaw.organization || enrichedData.organization || {}) as Record<string, unknown>
+
+  const allPhones = enrichedData.all_phones as string[] | undefined
+  const allEmails = enrichedData.all_emails as string[] | undefined
+  const verifiedEmails = enrichedData.verified_emails as string[] | undefined
+
+  const profileLines = [
+    `Name: ${[lead.firstName, lead.lastName].filter(Boolean).join(' ') || (enrichedData.name as string) || 'Unknown'}`,
+    `Email(s): ${allEmails?.join(', ') || lead.email || 'Not provided'}`,
+    verifiedEmails?.length ? `Verified emails: ${verifiedEmails.join(', ')}` : '',
+    `Phone(s): ${allPhones?.join(', ') || lead.phone || 'Not provided'}`,
+    `Source channel: ${lead.source || 'Unknown'}`,
+    `Title: ${enrichedData.title as string || 'Unknown'}`,
+    `Seniority: ${enrichedData.seniority as string || 'Unknown'}`,
+    `Company: ${enrichedData.current_company as string || 'Unknown'}`,
+    `Industry: ${enrichedData.company_industry as string || org.industry as string || 'Unknown'}`,
+    `Company size: ${enrichedData.company_size as string || org.estimated_num_employees as string || 'Unknown'}`,
+    `Location: ${enrichedData.location as string || 'Unknown'}`,
+    `LinkedIn: ${enrichedData.linkedin_url as string || 'Not found'}`,
+    `Headline: ${enrichedData.headline as string || 'None'}`,
+    `Company website: ${enrichedData.company_website as string || org.website_url as string || 'Unknown'}`,
+    `Company revenue: ${enrichedData.company_revenue as string || org.annual_revenue_printed as string || 'Unknown'}`,
+    `Company funding: ${enrichedData.company_funding as string || org.total_funding_printed as string || 'Unknown'}`,
+  ].filter(Boolean).join('\n')
+
+  const employmentLines = (enrichedData.employment_history as { title?: string; company?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined)
+    ?.slice(0, 5)
+    .map((e) => `  - ${e.current ? '(Current) ' : ''}${e.title || '—'} @ ${e.company || '—'}`)
+    .join('\n') || 'Not available'
+
+  const personaList = personas
+    .map((p, i) => {
+      const lines: string[] = [`${i + 1}. ID: ${p.id}`, `   Persona Name: ${p.name}`]
+      if (p.full_name || p.title_role) {
+        lines.push(`   --- SAMPLE PERSON ---`)
+        if (p.full_name) lines.push(`   Full Name: ${p.full_name}`)
+        if (p.title_role) lines.push(`   Title / Role: ${p.title_role}`)
+        if (p.age) lines.push(`   Age: ${p.age}`)
+        if (p.location) lines.push(`   Location: ${p.location}`)
+        if (p.current_income) lines.push(`   Current Income: ${p.current_income}`)
+        if (p.income_goal) lines.push(`   Income Goal: ${p.income_goal}`)
+        if (p.background_story) lines.push(`   Background Story: ${p.background_story}`)
+        if (p.core_frustration) lines.push(`   Core Frustration: ${p.core_frustration}`)
+      }
+      if (p.who_they_are || p.industry_experience || p.primary_frustration) {
+        lines.push(`   --- CHARACTERISTICS ---`)
+        if (p.who_they_are) lines.push(`   Who They Are: ${p.who_they_are}`)
+        if (p.industry_experience) lines.push(`   Industry Experience: ${p.industry_experience}`)
+        if (p.primary_frustration) lines.push(`   Primary Frustration: ${p.primary_frustration}`)
+        if (p.what_they_want) lines.push(`   What They Want: ${p.what_they_want}`)
+        if (p.decision_trigger) lines.push(`   Decision Trigger: ${p.decision_trigger}`)
+        if (p.trust_barrier) lines.push(`   Trust Barrier: ${p.trust_barrier}`)
+        if (p.engagement_style) lines.push(`   Engagement Style: ${p.engagement_style}`)
+        if (p.best_contact_method) lines.push(`   Best Contact Method: ${p.best_contact_method}`)
+        if (p.sells_into) lines.push(`   Sells Into: ${p.sells_into}`)
+      }
+      if (p.description) lines.push(`   Description: ${p.description}`)
+      if (p.characteristics) lines.push(`   Characteristics: ${p.characteristics}`)
+      if (p.state) lines.push(`   State: ${p.state}`)
+      if (p.county) lines.push(`   County: ${p.county}`)
+      return lines.join('\n')
+    })
+    .join('\n\n')
+
+  return `You are a lead qualification AI. Based on the fully enriched profile below, assign this lead to the most appropriate persona.
+
+ENRICHED LEAD PROFILE:
+${profileLines}
+
+EMPLOYMENT HISTORY:
+${employmentLines}
+
+DATA SOURCES USED: ${(enrichedData.sources_used as string[] | undefined)?.join(', ') || 'Unknown'}
+
+AVAILABLE PERSONAS:
+${personaList}
+
+Matching Instructions — analyze each persona field intensively:
+
+SAMPLE PERSON matching:
+- Title / Role: Does the lead's job title closely match this persona's title/role archetype?
+- Age: Is the lead's approximate age or career stage consistent with this persona's age profile?
+- Location: Does the lead's city/state match the persona's geographic location or State/County target?
+- Background Story: Does the lead's career history and company type align with this persona's background narrative?
+
+CHARACTERISTICS matching:
+- Who They Are: Does the lead's professional identity match this description?
+- Industry Experience: Does the lead's experience level and domain match?
+- Primary Frustration: Based on role and industry, does the lead likely face this frustration?
+- What They Want: Does the lead's career stage suggest they want the same outcomes?
+- Decision Trigger: What in the enriched data suggests whether this person would respond to this trigger?
+- Sells Into: Does the lead's company type match the verticals this persona sells into?
+
+Additional rules:
+- If a persona has a State or County specified, weight it for leads in that region
+- Choose the single best-matching persona based on ALL fields combined
+- If no persona is a good match (less than 50% field alignment), return persona_id as null
+
+Your final response MUST follow one of these exact formats:
+
+If a persona matches:
+Assigned Persona: [Persona Name]
+Persona ID: [persona UUID]
+Reasoning: [3-5 sentences explaining specifically why this persona matches, referencing the lead's actual job title, company, industry, seniority, and which persona fields aligned most strongly]
+
+If no persona matches:
+Assigned Persona: None
+Persona ID: null
+Reasoning: [3-5 sentences explaining specifically why none of the personas fit]`
+}
+
 export function extractPersonaFromText(finalText: string, personas: Persona[]): string | null {
   let assignedPersonaId: string | null = null
 

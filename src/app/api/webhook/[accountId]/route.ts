@@ -4,7 +4,8 @@ export const maxDuration = 60
 import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
-import { runEnrichmentAgent } from '@/lib/ai/agent'
+import { runPersonaAssignment } from '@/lib/ai/agent'
+import { runEnrichmentPipeline } from '@/lib/enrichment/pipeline'
 import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload, extractAttributionFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
@@ -130,26 +131,24 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
 
   await supabase.from('leads').update({ status: 'enriching', updated_at: new Date().toISOString() }).eq('id', leadId)
 
+  const ALL_ENRICHMENT_SERVICES = [
+    'ai_model', 'gemini', 'apollo', 'lusha', 'highlevel', 'highlevel_custom_fields', 'postmark',
+    'pdl', 'datagma', 'bettercontact', 'kaspr', 'cognism', 'contactout', 'hunter', 'dropcontact', 'findymail', 'enrow',
+  ]
+
   const { data: apiKeysData } = await supabase
     .from('api_keys')
     .select('service, key_value, extra_data')
     .eq('account_id', accountId)
-    .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'highlevel_custom_fields', 'postmark'])
+    .in('service', ALL_ENRICHMENT_SERVICES)
 
   const keyMap = Object.fromEntries((apiKeysData || []).map((k) => [k.service, k]))
-  const apolloKey = keyMap['apollo']?.key_value
   const highlevelKey = keyMap['highlevel']?.key_value
-  const lushaKey = keyMap['lusha']?.key_value || undefined
   const postmarkKey = keyMap['postmark']?.key_value
   const postmarkExtra = keyMap['postmark']?.extra_data as Record<string, string> | null
   const postmarkFromEmail = postmarkExtra?.from_email || ''
   const postmarkFromName = postmarkExtra?.from_name || ''
   const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
-
-  if (!apolloKey) {
-    await supabase.from('leads').update({ status: 'failed', error_message: 'Apollo API key not configured.', updated_at: new Date().toISOString() }).eq('id', leadId)
-    return
-  }
 
   let aiConfig: AIConfig
   if (keyMap['ai_model']) {
@@ -167,15 +166,38 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
 
   const hlLinkedinUrl = extractLinkedinFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
 
-  const result = await runEnrichmentAgent(aiConfig, apolloKey, {
-    firstName: lead.first_name, lastName: lead.last_name, email: lead.email,
-    phone: lead.phone, source: lead.source, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data,
-  }, personas || [], lushaKey)
+  // Run waterfall enrichment pipeline
+  const pipelineResult = await runEnrichmentPipeline(
+    { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data },
+    {
+      apollo: keyMap['apollo']?.key_value,
+      lusha: keyMap['lusha']?.key_value,
+      pdl: keyMap['pdl']?.key_value,
+      datagma: keyMap['datagma']?.key_value,
+      bettercontact: keyMap['bettercontact']?.key_value,
+      kaspr: keyMap['kaspr']?.key_value,
+      cognism: keyMap['cognism']?.key_value,
+      contactout: keyMap['contactout']?.key_value,
+      hunter: keyMap['hunter']?.key_value,
+      dropcontact: keyMap['dropcontact']?.key_value,
+      findymail: keyMap['findymail']?.key_value,
+      enrow: keyMap['enrow']?.key_value,
+    }
+  )
 
-  if (hlLinkedinUrl && result.enriched_data && !(result.enriched_data as Record<string, unknown>).linkedin_url) {
-    ;(result.enriched_data as Record<string, unknown>).linkedin_url = hlLinkedinUrl
-    ;(result.enriched_data as Record<string, unknown>).hl_linkedin_url = hlLinkedinUrl
+  const enrichedDataRaw = pipelineResult.enriched_data
+  enrichedDataRaw.sources_used = pipelineResult.sources_used
+  enrichedDataRaw.sources_skipped = pipelineResult.sources_skipped
+
+  if (hlLinkedinUrl && !enrichedDataRaw.linkedin_url) {
+    enrichedDataRaw.linkedin_url = hlLinkedinUrl
+    enrichedDataRaw.hl_linkedin_url = hlLinkedinUrl
   }
+
+  const leadInput = { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, source: lead.source }
+  const assignment = await runPersonaAssignment(aiConfig, leadInput, enrichedDataRaw, personas || [])
+
+  const result = { persona_id: assignment.persona_id, reasoning: assignment.reasoning, enriched_data: enrichedDataRaw }
 
   let assignedPersonaId = result.persona_id
   let reasoning = result.reasoning
