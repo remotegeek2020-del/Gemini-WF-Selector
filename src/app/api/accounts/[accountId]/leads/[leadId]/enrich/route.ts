@@ -3,8 +3,10 @@ export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, createAdminClient } from '@/lib/supabase/server'
-import { runEnrichmentAgent } from '@/lib/ai/agent'
+import { runPersonaAssignment } from '@/lib/ai/agent'
+import { runEnrichmentPipeline } from '@/lib/enrichment/pipeline'
 import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload, extractAttributionFromHLPayload } from '@/lib/highlevel/client'
+import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import type { AIConfig } from '@/types'
 
@@ -29,7 +31,6 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // Fetch the lead (verify it belongs to this account)
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .select('*')
@@ -43,45 +44,49 @@ export async function POST(
 
   if (lead.status === 'enriching') {
     const updatedAt = new Date(lead.updated_at).getTime()
-    const stuckThreshold = 5 * 60 * 1000
-    if (Date.now() - updatedAt < stuckThreshold) {
+    if (Date.now() - updatedAt < 5 * 60 * 1000) {
       return NextResponse.json({ error: 'Lead is already being enriched' }, { status: 409 })
     }
   }
 
-  // Mark as enriching
   await supabase
     .from('leads')
     .update({ status: 'enriching', updated_at: new Date().toISOString() })
     .eq('id', leadId)
 
+  const admin = createAdminClient()
+
   try {
-    // Fetch API keys for this account (ai_model, apollo, highlevel; also gemini for fallback)
-    const { data: apiKeysData, error: keysError } = await supabase
+    // Agency-level AI + enrichment keys
+    const { data: agencySettingsRows } = await admin
+      .from('agency_settings')
+      .select('key, value')
+      .in('key', ['enrichment_ai', 'enrichment_keys'])
+
+    const agencySettings: Record<string, unknown> = {}
+    for (const row of agencySettingsRows || []) agencySettings[row.key] = row.value
+    const agencyEnrichAi = agencySettings['enrichment_ai'] as { provider: string; model: string; api_key: string } | undefined
+    const agencyEnrichKeys = agencySettings['enrichment_keys'] as Record<string, string> | undefined
+
+    // Per-account keys: HL, postmark, legacy AI fallback
+    const ACCOUNT_SERVICES = ['ai_model', 'gemini', 'highlevel', 'highlevel_custom_fields', 'postmark']
+    const { data: apiKeysData } = await supabase
       .from('api_keys')
       .select('service, key_value, extra_data')
       .eq('account_id', accountId)
-      .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'postmark'])
+      .in('service', ACCOUNT_SERVICES)
 
-    if (keysError) throw new Error(`Failed to fetch API keys: ${keysError.message}`)
-
-    const keyMap = Object.fromEntries(
-      (apiKeysData || []).map((k) => [k.service, k])
-    )
-
-    const apolloKey = keyMap['apollo']?.key_value
+    const keyMap = Object.fromEntries((apiKeysData || []).map((k) => [k.service, k]))
     const highlevelKey = keyMap['highlevel']?.key_value
     const highlevelLocationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || null
-    const lushaKey = keyMap['lusha']?.key_value || undefined
     const postmarkKey = keyMap['postmark']?.key_value
     const postmarkExtra = keyMap['postmark']?.extra_data as Record<string, string> | null
     const postmarkFromEmail = postmarkExtra?.from_email || ''
     const postmarkFromName = postmarkExtra?.from_name || ''
     const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
 
-    // Fetch pipeline-level notification emails as fallback
-    const adminSb = createAdminClient()
-    const { data: pipelineData } = await adminSb
+    // Pipeline-level notification emails fallback
+    const { data: pipelineData } = await admin
       .from('pipelines')
       .select('notification_emails')
       .eq('account_id', accountId)
@@ -89,36 +94,23 @@ export async function POST(
       .single()
     const pipelineEmails: string[] = pipelineData?.notification_emails || []
 
-    if (!apolloKey) throw new Error('Apollo API key not configured. Please add it in Settings.')
-
-    // Build AIConfig — prefer 'ai_model' entry, fall back to legacy 'gemini' entry
+    // Resolve AI config: agency > per-account ai_model > per-account gemini
     let aiConfig: AIConfig
-
-    if (keyMap['ai_model']) {
+    if (agencyEnrichAi?.api_key) {
+      aiConfig = { provider: agencyEnrichAi.provider as AIConfig['provider'], model: agencyEnrichAi.model || 'gemini-2.5-flash', apiKey: agencyEnrichAi.api_key }
+    } else if (keyMap['ai_model']) {
       const entry = keyMap['ai_model']
-      const extraData = (entry.extra_data || {}) as Record<string, string>
-      const provider = (extraData.provider || 'gemini') as AIConfig['provider']
-      const model = extraData.model || getDefaultModel(provider)
-
-      aiConfig = {
-        provider,
-        model,
-        apiKey: entry.key_value,
-      }
+      const extra = (entry.extra_data || {}) as Record<string, string>
+      aiConfig = { provider: (extra.provider || 'gemini') as AIConfig['provider'], model: extra.model || 'gemini-2.5-flash', apiKey: entry.key_value }
     } else if (keyMap['gemini']) {
-      // Backward-compatible fallback
-      aiConfig = {
-        provider: 'gemini',
-        model: 'gemini-1.5-flash',
-        apiKey: keyMap['gemini'].key_value,
-      }
+      aiConfig = { provider: 'gemini', model: 'gemini-2.5-flash', apiKey: keyMap['gemini'].key_value }
     } else {
-      throw new Error(
-        'AI model API key not configured. Please add it in Settings.'
-      )
+      throw new Error('AI model API key not configured. Set it in Agency Settings.')
     }
 
-    // Fetch personas for this account, scoped to the lead's pipeline
+    const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
+
+    // Fetch personas scoped to this lead's pipeline
     const { data: personas, error: personasError } = await supabase
       .from('personas')
       .select('*')
@@ -130,30 +122,40 @@ export async function POST(
 
     const hlLinkedinUrl = extractLinkedinFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
 
-    // Run enrichment agent with the selected provider
-    const result = await runEnrichmentAgent(
-      aiConfig,
-      apolloKey,
+    // Run full 12-tool enrichment waterfall
+    const pipelineResult = await runEnrichmentPipeline(
+      { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data },
       {
-        firstName: lead.first_name,
-        lastName: lead.last_name,
-        email: lead.email,
-        phone: lead.phone,
-        source: lead.source,
-        linkedinUrl: hlLinkedinUrl,
-        rawData: lead.raw_data,
-      },
-      personas || [],
-      lushaKey
+        apollo: ek('apollo'),
+        lusha: ek('lusha'),
+        pdl: ek('pdl'),
+        datagma: ek('datagma'),
+        bettercontact: ek('bettercontact'),
+        kaspr: ek('kaspr'),
+        cognism: ek('cognism'),
+        contactout: ek('contactout'),
+        hunter: ek('hunter'),
+        dropcontact: ek('dropcontact'),
+        findymail: ek('findymail'),
+        enrow: ek('enrow'),
+      }
     )
 
-    if (hlLinkedinUrl && result.enriched_data && !(result.enriched_data as Record<string, unknown>).linkedin_url) {
-      ;(result.enriched_data as Record<string, unknown>).linkedin_url = hlLinkedinUrl
-      ;(result.enriched_data as Record<string, unknown>).hl_linkedin_url = hlLinkedinUrl
+    const enrichedDataRaw = pipelineResult.enriched_data
+    enrichedDataRaw.sources_used = pipelineResult.sources_used
+    enrichedDataRaw.sources_skipped = pipelineResult.sources_skipped
+
+    if (hlLinkedinUrl && !enrichedDataRaw.linkedin_url) {
+      enrichedDataRaw.linkedin_url = hlLinkedinUrl
+      enrichedDataRaw.hl_linkedin_url = hlLinkedinUrl
     }
 
-    let assignedPersonaId = result.persona_id
-    let reasoning = result.reasoning
+    // AI persona assignment
+    const leadInput = { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, source: lead.source }
+    const assignment = await runPersonaAssignment(aiConfig, leadInput, enrichedDataRaw, personas || [])
+
+    let assignedPersonaId = assignment.persona_id
+    let reasoning = assignment.reasoning
 
     if (!assignedPersonaId) {
       const defaultPersona = (personas || []).find((p) => p.is_default)
@@ -165,41 +167,22 @@ export async function POST(
 
     const finalStatus = assignedPersonaId ? 'assigned' : 'no_persona'
 
-    // Extract enriched name/phone/email from Apollo or Lusha
-    const ed = (result.enriched_data || {}) as Record<string, unknown>
+    // Extract enriched contact fields for HL write-back and email
+    const ed = enrichedDataRaw as Record<string, unknown>
     const apolloRaw = (ed.apollo_raw || {}) as Record<string, unknown>
     const org = (apolloRaw.organization || ed.organization) as Record<string, unknown> | undefined
-    const enrichedFirstName =
-      (ed.first_name as string | undefined) ||
-      (apolloRaw.first_name as string | undefined) ||
-      undefined
-    const enrichedLastName =
-      (ed.last_name as string | undefined) ||
-      (apolloRaw.last_name as string | undefined) ||
-      undefined
-    const enrichedEmail =
-      (ed.email as string | undefined) ||
-      (apolloRaw.email as string | undefined) ||
-      undefined
-    const enrichedPhone =
-      (ed.lusha_phones as string[] | undefined)?.[0] ||
-      (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number ||
-      undefined
-    const enrichedCompany =
-      (org?.name as string | undefined) ||
-      (ed.current_company as string | undefined) ||
-      (ed.lusha_company_name as string | undefined) ||
-      undefined
+    const enrichedFirstName = (ed.first_name as string | undefined) || (apolloRaw.first_name as string | undefined) || undefined
+    const enrichedLastName = (ed.last_name as string | undefined) || (apolloRaw.last_name as string | undefined) || undefined
+    const enrichedEmail = (ed.email as string | undefined) || (apolloRaw.email as string | undefined) || undefined
+    const enrichedPhone = (ed.lusha_phones as string[] | undefined)?.[0] || (ed.phone_numbers as { sanitized_number?: string }[] | undefined)?.[0]?.sanitized_number || undefined
+    const enrichedCompany = (org?.name as string | undefined) || (ed.current_company as string | undefined) || (ed.lusha_company_name as string | undefined) || undefined
     const enrichedTitle = (ed.title as string | undefined) || (apolloRaw.title as string | undefined) || undefined
     const enrichedLinkedin = (ed.linkedin_url as string | undefined) || (apolloRaw.linkedin_url as string | undefined) || (ed.hl_linkedin_url as string | undefined) || undefined
 
-    // Extract attribution from stored raw_data (for leads that arrived before this feature)
     const attribution = extractAttributionFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
 
-    // Build lead update — always refresh enriched_data; also backfill
-    // first_name/last_name/email/phone from Apollo if the lead arrived with blanks
     const leadUpdate: Record<string, unknown> = {
-      enriched_data: result.enriched_data,
+      enriched_data: enrichedDataRaw,
       assigned_persona_id: assignedPersonaId,
       persona_reasoning: reasoning,
       status: finalStatus,
@@ -213,11 +196,10 @@ export async function POST(
 
     await supabase.from('leads').update(leadUpdate).eq('id', leadId)
 
-    // Write enriched contact data back to HighLevel (name, email, phone, company)
+    // HL contact write-back
     if (highlevelKey) {
       let contactId = lead.highlevel_contact_id
 
-      // If no contact ID stored, look up by email in HL
       if (!contactId && highlevelLocationId && (lead.email || enrichedEmail)) {
         const lookupEmail = (lead.email || enrichedEmail)!
         const foundId = await lookupContactByEmail(highlevelKey, highlevelLocationId, lookupEmail)
@@ -238,48 +220,44 @@ export async function POST(
           phone: enrichedPhone,
           companyName: enrichedCompany,
         }).catch((e) => console.error('[HL] contact profile update failed:', e))
-      } else {
-        console.warn('[HL] no HL contact found for lead', leadId, 'email:', lead.email)
       }
     }
 
-    // Trigger Highlevel workflow only if a persona was matched or defaulted
+    // HL workflow + post-enrichment actions
     if (assignedPersonaId && finalStatus === 'assigned' && highlevelKey && lead.highlevel_contact_id) {
       const matchedPersona = (personas || []).find((p) => p.id === assignedPersonaId)
-      if (matchedPersona?.highlevel_workflow_id) {
-        const workflowResult = await assignWorkflow(
-          highlevelKey,
-          lead.highlevel_contact_id!,
-          matchedPersona.highlevel_workflow_id
-        )
+      const fieldIds = keyMap['highlevel_custom_fields']?.extra_data as {
+        persona_field_id: string; score_field_id: string; reasoning_field_id: string
+      } | null
 
+      if (matchedPersona?.highlevel_workflow_id) {
+        const workflowResult = await assignWorkflow(highlevelKey, lead.highlevel_contact_id!, matchedPersona.highlevel_workflow_id)
         if (workflowResult.success) {
-          await supabase
-            .from('leads')
-            .update({ workflow_triggered: true, updated_at: new Date().toISOString() })
-            .eq('id', leadId)
-        } else {
-          console.error('Failed to trigger workflow:', workflowResult.error)
+          await supabase.from('leads').update({ workflow_triggered: true, updated_at: new Date().toISOString() }).eq('id', leadId)
         }
+      }
+
+      if (matchedPersona) {
+        const isDefaultFallback = !assignment.persona_id && !!matchedPersona.is_default
+        await runPostEnrichmentHLActions({
+          apiKey: highlevelKey,
+          locationId: highlevelLocationId || '',
+          contactId: lead.highlevel_contact_id!,
+          persona: matchedPersona,
+          reasoning,
+          isDefaultFallback,
+          fieldIds,
+        })
       }
     }
 
-    // Send email notifications
+    // Email notifications
     const matchedPersonaForEmail = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
-    if (!postmarkKey) {
-      console.warn('[Email] skipped — postmark API key not configured')
-    } else if (!postmarkFrom) {
-      console.warn('[Email] skipped — postmark from_email not configured')
-    } else if (!matchedPersonaForEmail) {
-      console.warn('[Email] skipped — no matched persona (status:', finalStatus, ')')
-    } else {
+    if (postmarkKey && postmarkFrom && matchedPersonaForEmail) {
       const personaEmails: string[] = (matchedPersonaForEmail.notification_emails || []).filter(Boolean)
       const toEmails = Array.from(new Set([...pipelineEmails, ...personaEmails])).filter(Boolean)
-      if (toEmails.length === 0) {
-        console.warn('[Email] skipped — no recipient emails configured for persona or pipeline')
-      } else {
-        console.log('[Email] sending to:', toEmails)
-        const isDefaultFallback = !result.persona_id && !!matchedPersonaForEmail.is_default
+      if (toEmails.length > 0) {
+        const isDefaultFallback = !assignment.persona_id && !!matchedPersonaForEmail.is_default
         try {
           await sendLeadNotification(postmarkKey, toEmails, postmarkFrom, {
             firstName: enrichedFirstName || lead.first_name || undefined,
@@ -296,7 +274,7 @@ export async function POST(
             pipeline: lead.pipeline || 'main',
             source: lead.source || undefined,
             rawData: lead.raw_data || undefined,
-            enrichedData: result.enriched_data || undefined,
+            enrichedData: enrichedDataRaw,
           })
         } catch (e) {
           console.error('[Email] notification failed:', e)
@@ -307,8 +285,10 @@ export async function POST(
     return NextResponse.json({
       success: true,
       leadId,
-      personaId: result.persona_id,
+      personaId: assignment.persona_id,
       status: finalStatus,
+      sourcesUsed: pipelineResult.sources_used,
+      sourcesSkipped: pipelineResult.sources_skipped,
     })
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown enrichment error'
@@ -316,28 +296,9 @@ export async function POST(
 
     await supabase
       .from('leads')
-      .update({
-        status: 'failed',
-        error_message: errorMessage,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status: 'failed', error_message: errorMessage, updated_at: new Date().toISOString() })
       .eq('id', leadId)
 
     return NextResponse.json({ error: errorMessage }, { status: 500 })
-  }
-}
-
-function getDefaultModel(provider: AIConfig['provider']): string {
-  switch (provider) {
-    case 'gemini':
-      return 'gemini-1.5-flash'
-    case 'openai':
-      return 'gpt-4o'
-    case 'anthropic':
-      return 'claude-sonnet-4-5'
-    case 'openrouter':
-      return 'openai/gpt-4o'
-    default:
-      return 'gemini-1.5-flash'
   }
 }
