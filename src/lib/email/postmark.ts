@@ -54,6 +54,128 @@ function extractAttribution(rawData?: Record<string, unknown>): Record<string, s
   return attrs
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  apollo: 'Apollo.io', lusha: 'Lusha', pdl: 'People Data Labs',
+  datagma: 'Datagma', bettercontact: 'BetterContact', kaspr: 'Kaspr',
+  cognism: 'Cognism', contactout: 'ContactOut', hunter: 'Hunter.io',
+  dropcontact: 'Dropcontact', findymail: 'Findymail', enrow: 'Enrow',
+}
+
+function getToolContribution(tool: string, ed: Record<string, unknown>): string[] {
+  const items: string[] = []
+  switch (tool) {
+    case 'apollo': {
+      const raw = (ed.apollo_raw || {}) as Record<string, unknown>
+      const org = (raw.organization || {}) as Record<string, unknown>
+      if (raw.title) items.push(`Title: ${raw.title}`)
+      if (org.name) items.push(`Company: ${org.name}`)
+      const phones = (raw.phone_numbers as { sanitized_number?: string }[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}`)
+      if (raw.email) items.push(`Email found`)
+      if (raw.linkedin_url) items.push(`LinkedIn found`)
+      break
+    }
+    case 'lusha': {
+      const phones = (ed.lusha_phones as string[] | undefined) || []
+      const emails = (ed.lusha_emails as string[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}: ${phones.slice(0, 2).join(', ')}`)
+      if (emails.length) items.push(`${emails.length} email${emails.length > 1 ? 's' : ''}`)
+      if (ed.lusha_current_title && !ed.title) items.push(`Title: ${ed.lusha_current_title}`)
+      if (ed.lusha_current_company && !ed.current_company) items.push(`Company: ${ed.lusha_current_company}`)
+      break
+    }
+    case 'pdl': {
+      if (ed.pdl_title) items.push(`Title: ${ed.pdl_title}`)
+      if (ed.pdl_company) items.push(`Company: ${ed.pdl_company}`)
+      const phones = (ed.pdl_phones as string[] | undefined) || []
+      const emails = (ed.pdl_emails as string[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}`)
+      if (emails.length) items.push(`${emails.length} email${emails.length > 1 ? 's' : ''}`)
+      if (ed.pdl_location) items.push(`Location: ${ed.pdl_location}`)
+      break
+    }
+    case 'datagma': {
+      const phones = (ed.datagma_phones as string[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}`)
+      if (ed.datagma_email) items.push(`Email found`)
+      break
+    }
+    case 'bettercontact': {
+      const phones = (ed.bettercontact_phones as string[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}: ${phones.slice(0, 2).join(', ')}`)
+      break
+    }
+    case 'kaspr': {
+      const phones = (ed.kaspr_phones as string[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}`)
+      break
+    }
+    case 'cognism': {
+      const phones = (ed.cognism_phones as string[] | undefined) || []
+      if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}`)
+      break
+    }
+    case 'contactout': {
+      const emails = (ed.contactout_emails as string[] | undefined) || []
+      if (emails.length) items.push(`${emails.length} email${emails.length > 1 ? 's' : ''}: ${emails.slice(0, 2).join(', ')}`)
+      break
+    }
+    case 'hunter':
+      if (ed.hunter_email) items.push(`Email: ${ed.hunter_email}`)
+      break
+    case 'dropcontact':
+      if (ed.dropcontact_email) items.push(`Email: ${ed.dropcontact_email}`)
+      break
+    case 'findymail':
+      if (ed.findymail_email) items.push(`Email: ${ed.findymail_email}`)
+      break
+    case 'enrow': {
+      const verified = (ed.enrow_verified_emails as string[] | undefined) || []
+      if (verified.length) items.push(`${verified.length} verified email${verified.length > 1 ? 's' : ''}`)
+      break
+    }
+  }
+  return items
+}
+
+function buildWaterfallSection(ed: Record<string, unknown>): string {
+  const sourcesUsed = (ed.sources_used as string[] | undefined) || []
+  const sourcesSkipped = (ed.sources_skipped as string[] | undefined) || []
+  if (sourcesUsed.length === 0 && sourcesSkipped.length === 0) return ''
+
+  const allTools = [...sourcesUsed, ...sourcesSkipped.filter((t) => !sourcesUsed.includes(t))]
+  const rows = allTools.map((tool) => {
+    const label = TOOL_LABELS[tool] || tool
+    const used = sourcesUsed.includes(tool)
+    const contributions = used ? getToolContribution(tool, ed) : []
+    const hasNewData = contributions.length > 0
+    const statusColor = used && hasNewData ? '#16a34a' : used ? '#6b7280' : '#d1d5db'
+    const statusIcon = used && hasNewData ? '✓' : used ? '–' : '○'
+    const contribText = used
+      ? (hasNewData ? contributions.join(' · ') : 'No new data returned')
+      : 'Skipped'
+    return `<tr>
+      <td style="padding:4px 0;width:20px;vertical-align:top;">
+        <span style="color:${statusColor};font-size:12px;font-weight:700;">${statusIcon}</span>
+      </td>
+      <td style="padding:4px 8px 4px 0;width:140px;vertical-align:top;">
+        <span style="font-size:11px;font-weight:600;color:${used ? '#111827' : '#9ca3af'};">${label}</span>
+      </td>
+      <td style="padding:4px 0;vertical-align:top;">
+        <span style="font-size:11px;color:${used && hasNewData ? '#374151' : '#9ca3af'};">${contribText}</span>
+      </td>
+    </tr>`
+  }).join('')
+
+  return `
+  <div style="margin-top:20px;">
+    <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">Enrichment Waterfall</p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px 14px;">
+      <table style="width:100%;border-collapse:collapse;">${rows}</table>
+    </div>
+  </div>`
+}
+
 function row(label: string, value: string, link?: string): string {
   const cell = link
     ? `<a href="${link}" style="color:#4f46e5;">${value}</a>`
@@ -230,6 +352,7 @@ export async function sendLeadNotification(
     ${section('Contact Info', contactRows)}
     ${companyRows.trim() ? section('Company Intelligence', companyRows) : ''}
     ${employmentRows.trim() ? section('Employment History', employmentRows) : ''}
+    ${buildWaterfallSection(ed)}
     ${attrRows.trim() ? section('Lead Attribution (HighLevel)', attrRows) : ''}
     ${section('Routing', matchRows)}
 
