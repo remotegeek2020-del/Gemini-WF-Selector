@@ -23,6 +23,12 @@ interface PersonaGenAI {
   api_key: string
 }
 
+interface EnrichmentAI {
+  provider: AiProvider
+  model: string
+  api_key: string
+}
+
 const AI_PROVIDER_OPTIONS: { value: AiProvider; label: string }[] = [
   { value: 'gemini', label: 'Google Gemini' },
   { value: 'openai', label: 'OpenAI' },
@@ -56,6 +62,109 @@ const AI_PROVIDER_KEY_LABELS: Record<AiProvider, string> = {
   openai: 'OpenAI API Key',
   anthropic: 'Anthropic API Key',
   openrouter: 'OpenRouter API Key',
+}
+
+interface EnrichmentServiceConfig {
+  service: string
+  label: string
+  description: string
+  placeholder: string
+  phase: string
+}
+
+const ENRICHMENT_SERVICE_CONFIGS: EnrichmentServiceConfig[] = [
+  {
+    service: 'apollo',
+    label: 'Apollo.io',
+    phase: 'Phase 1 — Primary',
+    description: 'Always runs first. Returns title, company, LinkedIn URL, industry, employment history, and company size.',
+    placeholder: 'your-apollo-api-key',
+  },
+  {
+    service: 'lusha',
+    label: 'Lusha',
+    phase: 'Phase 1 — Primary',
+    description: 'Runs after Apollo when a LinkedIn URL is found. Specializes in direct dials and personal emails.',
+    placeholder: 'your-lusha-api-key',
+  },
+  {
+    service: 'pdl',
+    label: 'People Data Labs (PDL)',
+    phase: 'Phase 2 — Fallback Profile',
+    description: 'Fallback profile enrichment when Apollo finds no title or company. Large dataset with good coverage for SMBs and independent agents.',
+    placeholder: 'your-pdl-api-key',
+  },
+  {
+    service: 'datagma',
+    label: 'Datagma',
+    phase: 'Phase 2 — Fallback Profile',
+    description: 'LinkedIn profile enrichment and mobile phone finder. Runs when a LinkedIn URL is available.',
+    placeholder: 'your-datagma-api-key',
+  },
+  {
+    service: 'bettercontact',
+    label: 'BetterContact',
+    phase: 'Phase 3 — Phone Recovery',
+    description: 'Phone number recovery aggregating 15+ sources. Runs only when no phone number was found.',
+    placeholder: 'your-bettercontact-api-key',
+  },
+  {
+    service: 'kaspr',
+    label: 'Kaspr',
+    phase: 'Phase 3 — Phone Recovery',
+    description: 'LinkedIn-sourced mobile numbers. Runs when phone is still missing and a LinkedIn URL is available.',
+    placeholder: 'your-kaspr-api-key',
+  },
+  {
+    service: 'cognism',
+    label: 'Cognism',
+    phase: 'Phase 3 — Phone Recovery',
+    description: 'B2B mobile numbers and email finder. Runs as last-resort phone recovery.',
+    placeholder: 'your-cognism-api-key',
+  },
+  {
+    service: 'contactout',
+    label: 'ContactOut',
+    phase: 'Phase 4 — Email Recovery',
+    description: 'Personal and work email finder from LinkedIn URL. Runs when work email is missing.',
+    placeholder: 'your-contactout-api-key',
+  },
+  {
+    service: 'hunter',
+    label: 'Hunter.io',
+    phase: 'Phase 4 — Email Recovery',
+    description: 'Work email finder by company domain. Runs when company domain is known but work email is missing.',
+    placeholder: 'your-hunter-api-key',
+  },
+  {
+    service: 'dropcontact',
+    label: 'Dropcontact',
+    phase: 'Phase 4 — Email Recovery',
+    description: 'Work email finder by name and company. Runs as a fallback after Hunter.',
+    placeholder: 'your-dropcontact-api-key',
+  },
+  {
+    service: 'findymail',
+    label: 'Findymail',
+    phase: 'Phase 4 — Email Recovery',
+    description: 'Email finder via LinkedIn URL or name + domain. Final fallback for work email recovery.',
+    placeholder: 'your-findymail-api-key',
+  },
+  {
+    service: 'enrow',
+    label: 'Enrow',
+    phase: 'Phase 5 — Verification',
+    description: 'Verifies all collected emails are valid and deliverable. Very affordable (~$0.001/email).',
+    placeholder: 'your-enrow-api-key',
+  },
+]
+
+const PHASE_COLORS: Record<string, string> = {
+  'Phase 1 — Primary': 'bg-indigo-100 text-indigo-700',
+  'Phase 2 — Fallback Profile': 'bg-blue-100 text-blue-700',
+  'Phase 3 — Phone Recovery': 'bg-amber-100 text-amber-700',
+  'Phase 4 — Email Recovery': 'bg-emerald-100 text-emerald-700',
+  'Phase 5 — Verification': 'bg-purple-100 text-purple-700',
 }
 
 export default function AgencySettingsPage() {
@@ -101,6 +210,18 @@ export default function AgencySettingsPage() {
   const [aiApiKey, setAiApiKey] = useState('')
   const [aiConfigured, setAiConfigured] = useState(false)
   const [isSavingAi, setIsSavingAi] = useState(false)
+
+  // Enrichment AI state
+  const [enrichAiProvider, setEnrichAiProvider] = useState<AiProvider>('gemini')
+  const [enrichAiModel, setEnrichAiModel] = useState('gemini-2.5-flash')
+  const [enrichAiKey, setEnrichAiKey] = useState('')
+  const [enrichAiConfigured, setEnrichAiConfigured] = useState(false)
+  const [isSavingEnrichAi, setIsSavingEnrichAi] = useState(false)
+
+  // Enrichment tools state — key per service, saving state
+  const [enrichmentKeys, setEnrichmentKeys] = useState<Record<string, string>>({})
+  const [enrichmentInputs, setEnrichmentInputs] = useState<Record<string, string>>({})
+  const [savingEnrichService, setSavingEnrichService] = useState<string | null>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -214,6 +335,16 @@ export default function AgencySettingsPage() {
           setAiModel(aiCfg.model || 'gemini-2.5-flash')
           setAiConfigured(!!aiCfg.api_key)
         }
+
+        const enrichAiCfg = data.settings?.enrichment_ai as EnrichmentAI | undefined
+        if (enrichAiCfg) {
+          setEnrichAiProvider(enrichAiCfg.provider || 'gemini')
+          setEnrichAiModel(enrichAiCfg.model || 'gemini-2.5-flash')
+          setEnrichAiConfigured(!!enrichAiCfg.api_key)
+        }
+
+        const keys = data.settings?.enrichment_keys as Record<string, string> | undefined
+        if (keys) setEnrichmentKeys(keys)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings')
       } finally {
@@ -226,6 +357,11 @@ export default function AgencySettingsPage() {
   const handleAiProviderChange = (p: AiProvider) => {
     setAiProvider(p)
     setAiModel(AI_PROVIDER_MODELS[p][0].value)
+  }
+
+  const handleEnrichAiProviderChange = (p: AiProvider) => {
+    setEnrichAiProvider(p)
+    setEnrichAiModel(AI_PROVIDER_MODELS[p][0].value)
   }
 
   const handleSaveEmail = async (e: React.FormEvent) => {
@@ -261,10 +397,7 @@ export default function AgencySettingsPage() {
     setError(null)
     setSuccessMsg(null)
     try {
-      const payload: Record<string, unknown> = {
-        provider: aiProvider,
-        model: aiModel,
-      }
+      const payload: Record<string, unknown> = { provider: aiProvider, model: aiModel }
       if (aiApiKey.trim()) payload.api_key = aiApiKey.trim()
 
       const res = await fetch('/api/agency/settings', {
@@ -283,6 +416,66 @@ export default function AgencySettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to save AI settings')
     } finally {
       setIsSavingAi(false)
+    }
+  }
+
+  const handleSaveEnrichAi = async () => {
+    if (!enrichAiKey.trim() && !enrichAiConfigured) {
+      setError('Please enter an API key for the selected AI provider')
+      return
+    }
+    setIsSavingEnrichAi(true)
+    setError(null)
+    setSuccessMsg(null)
+    try {
+      const payload: Record<string, unknown> = { provider: enrichAiProvider, model: enrichAiModel }
+      if (enrichAiKey.trim()) payload.api_key = enrichAiKey.trim()
+
+      const res = await fetch('/api/agency/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enrichment_ai: payload }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to save')
+      }
+      setEnrichAiConfigured(true)
+      setEnrichAiKey('')
+      setSuccessMsg('Enrichment AI settings saved.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save enrichment AI settings')
+    } finally {
+      setIsSavingEnrichAi(false)
+    }
+  }
+
+  const handleSaveEnrichmentKey = async (service: string) => {
+    const keyVal = enrichmentInputs[service]?.trim()
+    if (!keyVal) {
+      setError(`Please enter an API key for ${service}`)
+      return
+    }
+    setSavingEnrichService(service)
+    setError(null)
+    setSuccessMsg(null)
+    try {
+      const res = await fetch('/api/agency/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enrichment_keys: { [service]: keyVal } }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to save')
+      }
+      setEnrichmentKeys((prev) => ({ ...prev, [service]: keyVal }))
+      setEnrichmentInputs((prev) => ({ ...prev, [service]: '' }))
+      setSuccessMsg(`${service} API key saved.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save key')
+    } finally {
+      setSavingEnrichService(null)
     }
   }
 
@@ -305,7 +498,7 @@ export default function AgencySettingsPage() {
       <main className="flex-1 p-8 overflow-auto bg-gray-50">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Agency Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure agency-level features and integrations.</p>
+          <p className="text-sm text-gray-500 mt-1">Configure agency-level AI, enrichment tools, and integrations. Sub-accounts inherit these settings automatically.</p>
         </div>
 
         {isLoading ? (
@@ -316,7 +509,7 @@ export default function AgencySettingsPage() {
             </svg>
           </div>
         ) : (
-          <div className="max-w-xl space-y-6">
+          <div className="max-w-2xl space-y-6">
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
             )}
@@ -324,31 +517,152 @@ export default function AgencySettingsPage() {
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{successMsg}</div>
             )}
 
-            {/* AI Persona Generator */}
+            {/* ── Enrichment AI Model ── */}
             <Card>
               <CardHeader>
-                <CardTitle>AI Persona Generator</CardTitle>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>AI Model — Lead Enrichment &amp; Persona Assignment</CardTitle>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Powers the persona matching and hot-lead scoring that runs after each lead is enriched. Used by all sub-accounts.
+                    </p>
+                  </div>
+                  {enrichAiConfigured && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex-shrink-0">Configured</span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {enrichAiConfigured && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500">Current:</span>
+                    <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-700">
+                      {enrichAiProvider} / {enrichAiModel}
+                    </code>
+                  </div>
+                )}
+                <div className="space-y-3 pt-1 border-t border-gray-100">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">AI Provider</label>
+                    <select
+                      value={enrichAiProvider}
+                      onChange={(e) => handleEnrichAiProviderChange(e.target.value as AiProvider)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {AI_PROVIDER_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                    <select
+                      value={enrichAiModel}
+                      onChange={(e) => setEnrichAiModel(e.target.value)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {AI_PROVIDER_MODELS[enrichAiProvider].map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Input
+                    label={enrichAiConfigured ? `Update ${AI_PROVIDER_KEY_LABELS[enrichAiProvider]}` : AI_PROVIDER_KEY_LABELS[enrichAiProvider]}
+                    type="password"
+                    value={enrichAiKey}
+                    onChange={(e) => setEnrichAiKey(e.target.value)}
+                    placeholder={enrichAiConfigured ? 'Leave blank to keep existing key' : 'Enter API key'}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={handleSaveEnrichAi} isLoading={isSavingEnrichAi} size="sm">
+                    {enrichAiConfigured ? 'Update Configuration' : 'Save Configuration'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Enrichment Tools ── */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Enrichment Tools</CardTitle>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Configure the AI model used for persona generation. Enable per-account access inside each account&apos;s Settings page.
+                  Clay-style waterfall pipeline. Tools activate automatically when an API key is saved — no key, no cost. All sub-accounts share these keys.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Phase legend */}
+                  <div className="flex flex-wrap gap-1.5 pb-2 border-b border-gray-100">
+                    {Object.entries(PHASE_COLORS).map(([phase, cls]) => (
+                      <span key={phase} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{phase}</span>
+                    ))}
+                  </div>
+
+                  {ENRICHMENT_SERVICE_CONFIGS.map((config) => {
+                    const hasKey = !!enrichmentKeys[config.service]
+                    const inputVal = enrichmentInputs[config.service] || ''
+                    return (
+                      <div key={config.service} className="border border-gray-200 rounded-lg p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-gray-900">{config.label}</span>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PHASE_COLORS[config.phase]}`}>{config.phase}</span>
+                              {hasKey && (
+                                <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{config.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="password"
+                            value={inputVal}
+                            onChange={(e) => setEnrichmentInputs((prev) => ({ ...prev, [config.service]: e.target.value }))}
+                            placeholder={hasKey ? 'Leave blank to keep existing key' : config.placeholder}
+                            className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <Button
+                            onClick={() => handleSaveEnrichmentKey(config.service)}
+                            isLoading={savingEnrichService === config.service}
+                            size="sm"
+                            disabled={!inputVal.trim()}
+                          >
+                            {hasKey ? 'Update' : 'Activate'}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── AI Persona Generator ── */}
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Model — Persona Generator</CardTitle>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Used only for the AI-powered persona generation feature in the Personas page. Separate from the enrichment AI above.
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-gray-500">
-                  Set up the AI provider and API key here. Then go to each account&apos;s Settings to turn the feature on or off for that specific account — giving you full control over who gets access.
-                </p>
-
                 {aiConfigured && (
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-gray-500">Current:</span>
                     <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono text-gray-700">
                       {aiProvider} / {aiModel}
                     </code>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                      Configured
-                    </span>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Configured</span>
                   </div>
                 )}
-
                 <div className="space-y-3 pt-1 border-t border-gray-100">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">AI Provider</label>
@@ -362,7 +676,6 @@ export default function AgencySettingsPage() {
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
                     <select
@@ -375,7 +688,6 @@ export default function AgencySettingsPage() {
                       ))}
                     </select>
                   </div>
-
                   <Input
                     label={aiConfigured ? `Update ${AI_PROVIDER_KEY_LABELS[aiProvider]}` : AI_PROVIDER_KEY_LABELS[aiProvider]}
                     type="password"
@@ -384,7 +696,6 @@ export default function AgencySettingsPage() {
                     placeholder={aiConfigured ? 'Leave blank to keep existing key' : 'Enter API key'}
                   />
                 </div>
-
                 <div className="flex justify-end">
                   <Button onClick={handleSaveAi} isLoading={isSavingAi} size="sm">
                     {aiConfigured ? 'Update Configuration' : 'Save Configuration'}
@@ -393,7 +704,7 @@ export default function AgencySettingsPage() {
               </CardContent>
             </Card>
 
-            {/* Email Configuration */}
+            {/* ── Email Configuration ── */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -419,31 +730,9 @@ export default function AgencySettingsPage() {
                       <option value="sendgrid">SendGrid</option>
                     </select>
                   </div>
-                  <Input
-                    label="API Key"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter API key"
-                    required
-                    autoComplete="off"
-                  />
-                  <Input
-                    label="Sender Name"
-                    type="text"
-                    value={senderName}
-                    onChange={(e) => setSenderName(e.target.value)}
-                    placeholder="Lead Router"
-                    required
-                  />
-                  <Input
-                    label="Sender Email"
-                    type="email"
-                    value={senderEmail}
-                    onChange={(e) => setSenderEmail(e.target.value)}
-                    placeholder="no-reply@example.com"
-                    required
-                  />
+                  <Input label="API Key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Enter API key" required autoComplete="off" />
+                  <Input label="Sender Name" type="text" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Lead Router" required />
+                  <Input label="Sender Email" type="email" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} placeholder="no-reply@example.com" required />
                   <div className="flex justify-end pt-2">
                     <Button type="submit" isLoading={isSavingEmail}>Save Settings</Button>
                   </div>
@@ -458,7 +747,7 @@ export default function AgencySettingsPage() {
                   <div>
                     <CardTitle>Persona Library</CardTitle>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Create reusable persona templates. Sub-accounts can import these into any pipeline (LinkedIn, Facebook, Google, etc.)
+                      Create reusable persona templates. Sub-accounts can import these into any pipeline.
                     </p>
                   </div>
                   <button
@@ -473,7 +762,6 @@ export default function AgencySettingsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Category filter */}
                 <div className="flex flex-wrap gap-1.5">
                   {['all', 'general', 'linkedin', 'facebook', 'google'].map((cat) => (
                     <button
@@ -532,12 +820,10 @@ export default function AgencySettingsPage() {
                   </div>
                 )}
 
-                {/* Inline create/edit form */}
                 {libraryFormOpen && (
                   <div ref={libraryFormRef} className="border border-indigo-200 rounded-lg p-4 bg-indigo-50 space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">{editingEntry ? 'Edit Template' : 'New Template'}</h3>
                     {libraryError && <p className="text-xs text-red-600">{libraryError}</p>}
-
                     <div className="grid grid-cols-2 gap-3">
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-700 mb-1">Name *</label>
@@ -608,7 +894,6 @@ export default function AgencySettingsPage() {
                         <textarea value={libCoreFrustration} onChange={e => setLibCoreFrustration(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
                       </div>
                     </div>
-
                     <div className="flex justify-end gap-2 pt-1">
                       <button onClick={() => { setLibraryFormOpen(false); setEditingEntry(null) }} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg">
                         Cancel

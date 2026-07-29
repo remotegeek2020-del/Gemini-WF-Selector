@@ -55,9 +55,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { email_config, persona_gen_ai } = body
+  const { email_config, persona_gen_ai, enrichment_ai, enrichment_keys } = body as {
+    email_config?: unknown
+    persona_gen_ai?: unknown
+    enrichment_ai?: unknown
+    enrichment_keys?: Record<string, string>
+  }
 
-  if (!email_config && !persona_gen_ai) {
+  if (!email_config && !persona_gen_ai && !enrichment_ai && !enrichment_keys) {
     return NextResponse.json({ error: 'Nothing to save' }, { status: 400 })
   }
 
@@ -66,6 +71,18 @@ export async function POST(request: NextRequest) {
 
   if (email_config) upserts.push({ key: 'email_config', value: email_config })
   if (persona_gen_ai !== undefined) upserts.push({ key: 'persona_gen_ai', value: persona_gen_ai })
+  if (enrichment_ai !== undefined) upserts.push({ key: 'enrichment_ai', value: enrichment_ai })
+
+  // Merge partial enrichment_keys into existing blob
+  if (enrichment_keys && Object.keys(enrichment_keys).length > 0) {
+    const { data: existing } = await admin
+      .from('agency_settings')
+      .select('value')
+      .eq('key', 'enrichment_keys')
+      .single()
+    const merged = { ...((existing?.value as Record<string, string>) || {}), ...enrichment_keys }
+    upserts.push({ key: 'enrichment_keys', value: merged })
+  }
 
   for (const row of upserts) {
     const { error: upsertError } = await admin.from('agency_settings').upsert(

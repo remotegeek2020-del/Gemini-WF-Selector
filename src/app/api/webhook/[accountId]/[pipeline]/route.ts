@@ -123,16 +123,24 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
 
   await supabase.from('leads').update({ status: 'enriching', updated_at: new Date().toISOString() }).eq('id', leadId)
 
-  const ALL_ENRICHMENT_SERVICES = [
-    'ai_model', 'gemini', 'apollo', 'lusha', 'highlevel', 'highlevel_custom_fields', 'postmark',
-    'pdl', 'datagma', 'bettercontact', 'kaspr', 'cognism', 'contactout', 'hunter', 'dropcontact', 'findymail', 'enrow',
-  ]
+  // Fetch agency-level AI + enrichment key settings
+  const { data: agencySettingsRows } = await supabase
+    .from('agency_settings')
+    .select('key, value')
+    .in('key', ['enrichment_ai', 'enrichment_keys'])
 
+  const agencySettings: Record<string, unknown> = {}
+  for (const row of agencySettingsRows || []) agencySettings[row.key] = row.value
+  const agencyEnrichAi = agencySettings['enrichment_ai'] as { provider: string; model: string; api_key: string } | undefined
+  const agencyEnrichKeys = agencySettings['enrichment_keys'] as Record<string, string> | undefined
+
+  // Per-account keys (HighLevel, email, legacy AI key)
+  const ACCOUNT_SERVICES = ['ai_model', 'gemini', 'highlevel', 'highlevel_custom_fields', 'postmark']
   const { data: apiKeysData } = await supabase
     .from('api_keys')
     .select('service, key_value, extra_data')
     .eq('account_id', accountId)
-    .in('service', ALL_ENRICHMENT_SERVICES)
+    .in('service', ACCOUNT_SERVICES)
 
   const keyMap = Object.fromEntries((apiKeysData || []).map((k) => [k.service, k]))
   const highlevelKey = keyMap['highlevel']?.key_value
@@ -142,17 +150,23 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
   const postmarkFromName = postmarkExtra?.from_name || ''
   const postmarkFrom = postmarkFromName && postmarkFromEmail ? `${postmarkFromName} <${postmarkFromEmail}>` : postmarkFromEmail
 
+  // Resolve AI config: agency > per-account ai_model > per-account gemini
   let aiConfig: AIConfig
-  if (keyMap['ai_model']) {
+  if (agencyEnrichAi?.api_key) {
+    aiConfig = { provider: agencyEnrichAi.provider as AIConfig['provider'], model: agencyEnrichAi.model || 'gemini-2.5-flash', apiKey: agencyEnrichAi.api_key }
+  } else if (keyMap['ai_model']) {
     const entry = keyMap['ai_model']
     const extra = (entry.extra_data || {}) as Record<string, string>
     aiConfig = { provider: (extra.provider || 'gemini') as AIConfig['provider'], model: extra.model || 'gemini-2.5-flash', apiKey: entry.key_value }
   } else if (keyMap['gemini']) {
     aiConfig = { provider: 'gemini', model: 'gemini-2.5-flash', apiKey: keyMap['gemini'].key_value }
   } else {
-    await supabase.from('leads').update({ status: 'failed', error_message: 'AI model API key not configured.', updated_at: new Date().toISOString() }).eq('id', leadId)
+    await supabase.from('leads').update({ status: 'failed', error_message: 'AI model API key not configured. Set it in Agency Settings.', updated_at: new Date().toISOString() }).eq('id', leadId)
     return
   }
+
+  // Resolve enrichment key: agency-level only
+  const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
 
   const { data: personas } = await supabase
     .from('personas')
@@ -167,18 +181,18 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
   const pipelineResult = await runEnrichmentPipeline(
     { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data },
     {
-      apollo: keyMap['apollo']?.key_value,
-      lusha: keyMap['lusha']?.key_value,
-      pdl: keyMap['pdl']?.key_value,
-      datagma: keyMap['datagma']?.key_value,
-      bettercontact: keyMap['bettercontact']?.key_value,
-      kaspr: keyMap['kaspr']?.key_value,
-      cognism: keyMap['cognism']?.key_value,
-      contactout: keyMap['contactout']?.key_value,
-      hunter: keyMap['hunter']?.key_value,
-      dropcontact: keyMap['dropcontact']?.key_value,
-      findymail: keyMap['findymail']?.key_value,
-      enrow: keyMap['enrow']?.key_value,
+      apollo: ek('apollo'),
+      lusha: ek('lusha'),
+      pdl: ek('pdl'),
+      datagma: ek('datagma'),
+      bettercontact: ek('bettercontact'),
+      kaspr: ek('kaspr'),
+      cognism: ek('cognism'),
+      contactout: ek('contactout'),
+      hunter: ek('hunter'),
+      dropcontact: ek('dropcontact'),
+      findymail: ek('findymail'),
+      enrow: ek('enrow'),
     }
   )
 
