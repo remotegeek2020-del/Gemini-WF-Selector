@@ -147,10 +147,10 @@ function getToolData(tool: string, ed: Record<string, unknown>): Record<string, 
 const PERSONAL_DOMAINS = new Set(['gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','aol.com','protonmail.com','mail.com','msn.com','live.com','me.com'])
 
 function getSkipReason(tool: string, ed: Record<string, unknown>): string {
+  // sources_skipped only means the tool didn't run at all (key missing or prerequisite not met)
   const linkedIn = ed.linkedin_url as string | undefined
   const allPhones = (ed.all_phones as string[] | undefined) || []
   const allEmails = (ed.all_emails as string[] | undefined) || []
-  const hasEnrichedPhone = allPhones.length > 0
   const hasWorkEmail = allEmails.some(e => {
     const domain = e.split('@')[1]?.toLowerCase()
     return domain && !PERSONAL_DOMAINS.has(domain)
@@ -160,23 +160,24 @@ function getSkipReason(tool: string, ed: Record<string, unknown>): string {
     case 'apollo':
       return "No Apollo API key set up yet"
     case 'lusha':
-      if (!linkedIn) return "Needs a LinkedIn URL or email to search — didn't have either"
       return "No Lusha API key set up yet"
-    case 'pdl':
-      if (ed.title && hasEnrichedPhone) return "Apollo already found a job title and phone number, so we skipped this to save credits"
+    case 'pdl': {
+      const apolloFoundProfile = !!(ed.title || ed.current_company)
+      if (apolloFoundProfile && allPhones.length > 1) return "Apollo already found job title and phone — skipped to save credits"
       return "No People Data Labs API key set up yet"
+    }
     case 'datagma':
       if (!linkedIn) return "Needs a LinkedIn profile URL — we didn't find one for this person"
       return "No Datagma API key set up yet"
     case 'bettercontact':
-      if (hasEnrichedPhone) return "Already found phone numbers earlier — skipped to save credits"
+      if (allPhones.length > 1) return "Already found phone numbers earlier — skipped to save credits"
       return "No BetterContact API key set up yet"
     case 'kaspr':
-      if (hasEnrichedPhone) return "Already found phone numbers earlier — skipped to save credits"
+      if (allPhones.length > 1) return "Already found phone numbers earlier — skipped to save credits"
       if (!linkedIn) return "Needs a LinkedIn URL — we didn't find one for this person"
       return "No Kaspr API key set up yet"
     case 'cognism':
-      if (hasEnrichedPhone) return "Already found phone numbers earlier — skipped to save credits"
+      if (allPhones.length > 1) return "Already found phone numbers earlier — skipped to save credits"
       return "No Cognism API key set up yet"
     case 'contactout':
       if (hasWorkEmail) return "Already has a work email address — no need to search"

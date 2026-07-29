@@ -157,10 +157,8 @@ export async function runEnrichmentPipeline(
         linkedinUrl = pdlResult.data.pdl_linkedin as string
         ed.linkedin_url = linkedinUrl
       }
-      sources_used.push('pdl')
-    } else {
-      sources_skipped.push('pdl') // ran but no match
     }
+    sources_used.push('pdl') // ran (data found or not)
   } else {
     sources_skipped.push('pdl')
   }
@@ -175,10 +173,8 @@ export async function runEnrichmentPipeline(
       ed.datagma_phones = datagmaResult.data.datagma_phones
       if (datagmaResult.data.datagma_email) ed.datagma_email = datagmaResult.data.datagma_email
       ed.datagma_raw = datagmaResult.data.datagma_raw
-      sources_used.push('datagma')
-    } else {
-      sources_skipped.push('datagma')
     }
+    sources_used.push('datagma') // ran (data found or not)
   } else {
     sources_skipped.push('datagma')
   }
@@ -196,24 +192,16 @@ export async function runEnrichmentPipeline(
         company: ed.current_company as string | undefined,
         linkedinUrl: linkedinUrl,
       })
-      if (bcResult.phones.length > 0) {
-        ed.bettercontact_phones = bcResult.phones
-        sources_used.push('bettercontact')
-      } else {
-        sources_skipped.push('bettercontact')
-      }
+      if (bcResult.phones.length > 0) ed.bettercontact_phones = bcResult.phones
+      sources_used.push('bettercontact') // ran (phones found or not)
     } else {
       sources_skipped.push('bettercontact')
     }
 
     if (keys.kaspr && linkedinUrl) {
       const kasprResult = await kasprFindPhone(keys.kaspr, { linkedinUrl })
-      if (kasprResult.phones.length > 0) {
-        ed.kaspr_phones = kasprResult.phones
-        sources_used.push('kaspr')
-      } else {
-        sources_skipped.push('kaspr')
-      }
+      if (kasprResult.phones.length > 0) ed.kaspr_phones = kasprResult.phones
+      sources_used.push('kaspr') // ran (phones found or not)
     } else {
       sources_skipped.push('kaspr')
     }
@@ -229,10 +217,8 @@ export async function runEnrichmentPipeline(
       if (cognismResult.phones.length > 0) {
         ed.cognism_phones = cognismResult.phones
         if (cognismResult.email) ed.cognism_email = cognismResult.email
-        sources_used.push('cognism')
-      } else {
-        sources_skipped.push('cognism')
       }
+      sources_used.push('cognism') // ran (phones found or not)
     } else {
       sources_skipped.push('cognism')
     }
@@ -253,10 +239,8 @@ export async function runEnrichmentPipeline(
       if (coResult.emails.length > 0) {
         ed.contactout_emails = coResult.emails
         if (coResult.phones.length > 0) ed.contactout_phones = coResult.phones
-        sources_used.push('contactout')
-      } else {
-        sources_skipped.push('contactout')
       }
+      sources_used.push('contactout') // ran (emails found or not)
     } else {
       sources_skipped.push('contactout')
     }
@@ -270,10 +254,8 @@ export async function runEnrichmentPipeline(
       if (hunterResult.email) {
         ed.hunter_email = hunterResult.email
         ed.hunter_confidence = hunterResult.confidence
-        sources_used.push('hunter')
-      } else {
-        sources_skipped.push('hunter')
       }
+      sources_used.push('hunter') // ran (email found or not)
     } else {
       sources_skipped.push('hunter')
     }
@@ -288,10 +270,8 @@ export async function runEnrichmentPipeline(
       if (dcResult.emails.length > 0) {
         ed.dropcontact_email = dcResult.email
         ed.dropcontact_emails = dcResult.emails
-        sources_used.push('dropcontact')
-      } else {
-        sources_skipped.push('dropcontact')
       }
+      sources_used.push('dropcontact') // ran (email found or not)
     } else {
       sources_skipped.push('dropcontact')
     }
@@ -303,12 +283,8 @@ export async function runEnrichmentPipeline(
         lastName: lead.lastName,
         domain: companyDomain,
       })
-      if (fmResult.email) {
-        ed.findymail_email = fmResult.email
-        sources_used.push('findymail')
-      } else {
-        sources_skipped.push('findymail')
-      }
+      if (fmResult.email) ed.findymail_email = fmResult.email
+      sources_used.push('findymail') // ran (email found or not)
     } else {
       sources_skipped.push('findymail')
     }
