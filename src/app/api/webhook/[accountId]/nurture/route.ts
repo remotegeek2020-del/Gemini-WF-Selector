@@ -4,8 +4,9 @@ export const maxDuration = 60
 import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { createAdminClient } from '@/lib/supabase/server'
-import { runEnrichmentAgent } from '@/lib/ai/agent'
-import { assignWorkflow } from '@/lib/highlevel/client'
+import { runPersonaAssignment } from '@/lib/ai/agent'
+import { runEnrichmentPipeline } from '@/lib/enrichment/pipeline'
+import { assignWorkflow, extractLinkedinFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import type { AIConfig } from '@/types'
 
@@ -114,33 +115,45 @@ async function enrichNurtureLead(accountId: string, leadId: string) {
 
   await supabase.from('leads').update({ status: 'enriching', updated_at: new Date().toISOString() }).eq('id', leadId)
 
+  // Fetch agency-level AI + enrichment key settings
+  const { data: agencySettingsRows } = await supabase
+    .from('agency_settings')
+    .select('key, value')
+    .in('key', ['enrichment_ai', 'enrichment_keys'])
+
+  const agencySettings: Record<string, unknown> = {}
+  for (const row of agencySettingsRows || []) agencySettings[row.key] = row.value
+  const agencyEnrichAi = agencySettings['enrichment_ai'] as { provider: string; model: string; api_key: string } | undefined
+  const agencyEnrichKeys = agencySettings['enrichment_keys'] as Record<string, string> | undefined
+
+  // Per-account keys: HighLevel, postmark, legacy AI fallback
+  const ACCOUNT_SERVICES = ['ai_model', 'gemini', 'highlevel', 'highlevel_custom_fields', 'postmark']
   const { data: apiKeysData } = await supabase
     .from('api_keys')
     .select('service, key_value, extra_data')
     .eq('account_id', accountId)
-    .in('service', ['ai_model', 'gemini', 'apollo', 'highlevel', 'lusha', 'highlevel_custom_fields'])
+    .in('service', ACCOUNT_SERVICES)
 
   const keyMap = Object.fromEntries((apiKeysData || []).map((k) => [k.service, k]))
-  const apolloKey = keyMap['apollo']?.key_value
   const highlevelKey = keyMap['highlevel']?.key_value
-  const lushaKey = keyMap['lusha']?.key_value || undefined
+  const locationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || ''
 
-  if (!apolloKey) {
-    await supabase.from('leads').update({ status: 'failed', error_message: 'Apollo API key not configured.', updated_at: new Date().toISOString() }).eq('id', leadId)
-    return
-  }
-
+  // Resolve AI config: agency > per-account ai_model > per-account gemini
   let aiConfig: AIConfig
-  if (keyMap['ai_model']) {
+  if (agencyEnrichAi?.api_key) {
+    aiConfig = { provider: agencyEnrichAi.provider as AIConfig['provider'], model: agencyEnrichAi.model || 'gemini-2.5-flash', apiKey: agencyEnrichAi.api_key }
+  } else if (keyMap['ai_model']) {
     const entry = keyMap['ai_model']
     const extra = (entry.extra_data || {}) as Record<string, string>
     aiConfig = { provider: (extra.provider || 'gemini') as AIConfig['provider'], model: extra.model || 'gemini-2.5-flash', apiKey: entry.key_value }
   } else if (keyMap['gemini']) {
     aiConfig = { provider: 'gemini', model: 'gemini-2.5-flash', apiKey: keyMap['gemini'].key_value }
   } else {
-    await supabase.from('leads').update({ status: 'failed', error_message: 'AI model API key not configured.', updated_at: new Date().toISOString() }).eq('id', leadId)
+    await supabase.from('leads').update({ status: 'failed', error_message: 'AI model API key not configured. Set it in Agency Settings.', updated_at: new Date().toISOString() }).eq('id', leadId)
     return
   }
+
+  const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
 
   const { data: personas } = await supabase
     .from('personas')
@@ -149,13 +162,40 @@ async function enrichNurtureLead(accountId: string, leadId: string) {
     .eq('pipeline', 'nurture')
     .order('created_at', { ascending: true })
 
-  const result = await runEnrichmentAgent(aiConfig, apolloKey, {
-    firstName: lead.first_name, lastName: lead.last_name, email: lead.email,
-    phone: lead.phone, source: lead.source, rawData: lead.raw_data,
-  }, personas || [], lushaKey)
+  const hlLinkedinUrl = extractLinkedinFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
 
-  let assignedPersonaId = result.persona_id
-  let reasoning = result.reasoning
+  const pipelineResult = await runEnrichmentPipeline(
+    { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, linkedinUrl: hlLinkedinUrl, rawData: lead.raw_data },
+    {
+      apollo: ek('apollo'),
+      lusha: ek('lusha'),
+      pdl: ek('pdl'),
+      datagma: ek('datagma'),
+      bettercontact: ek('bettercontact'),
+      kaspr: ek('kaspr'),
+      cognism: ek('cognism'),
+      contactout: ek('contactout'),
+      hunter: ek('hunter'),
+      dropcontact: ek('dropcontact'),
+      findymail: ek('findymail'),
+      enrow: ek('enrow'),
+    }
+  )
+
+  const enrichedDataRaw = pipelineResult.enriched_data
+  enrichedDataRaw.sources_used = pipelineResult.sources_used
+  enrichedDataRaw.sources_skipped = pipelineResult.sources_skipped
+
+  if (hlLinkedinUrl && !enrichedDataRaw.linkedin_url) {
+    enrichedDataRaw.linkedin_url = hlLinkedinUrl
+    enrichedDataRaw.hl_linkedin_url = hlLinkedinUrl
+  }
+
+  const leadInput = { firstName: lead.first_name, lastName: lead.last_name, email: lead.email, phone: lead.phone, source: lead.source }
+  const assignment = await runPersonaAssignment(aiConfig, leadInput, enrichedDataRaw, personas || [])
+
+  let assignedPersonaId = assignment.persona_id
+  let reasoning = assignment.reasoning
 
   if (!assignedPersonaId) {
     const defaultPersona = (personas || []).find((p) => p.is_default)
@@ -168,7 +208,7 @@ async function enrichNurtureLead(accountId: string, leadId: string) {
   const finalStatus = assignedPersonaId ? 'assigned' : 'no_persona'
 
   await supabase.from('leads').update({
-    enriched_data: result.enriched_data,
+    enriched_data: enrichedDataRaw,
     assigned_persona_id: assignedPersonaId,
     persona_reasoning: reasoning,
     status: finalStatus,
@@ -177,7 +217,6 @@ async function enrichNurtureLead(accountId: string, leadId: string) {
 
   if (assignedPersonaId && highlevelKey && lead.highlevel_contact_id) {
     const matched = (personas || []).find((p) => p.id === assignedPersonaId)
-    const locationId = (keyMap['highlevel']?.extra_data as Record<string, string> | null)?.location_id || ''
     const fieldIds = keyMap['highlevel_custom_fields']?.extra_data as {
       persona_field_id: string; score_field_id: string; reasoning_field_id: string
     } | null
@@ -190,7 +229,7 @@ async function enrichNurtureLead(accountId: string, leadId: string) {
     }
 
     if (matched) {
-      const isDefaultFallback = !result.persona_id && !!matched.is_default
+      const isDefaultFallback = !assignment.persona_id && !!matched.is_default
       await runPostEnrichmentHLActions({
         apiKey: highlevelKey,
         locationId,
