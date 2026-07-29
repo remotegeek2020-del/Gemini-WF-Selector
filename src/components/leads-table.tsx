@@ -144,6 +144,62 @@ function getToolData(tool: string, ed: Record<string, unknown>): Record<string, 
   }
 }
 
+const PERSONAL_DOMAINS = new Set(['gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','aol.com','protonmail.com','mail.com','msn.com','live.com','me.com'])
+
+function getSkipReason(tool: string, ed: Record<string, unknown>): string {
+  const linkedIn = ed.linkedin_url as string | undefined
+  const allPhones = (ed.all_phones as string[] | undefined) || []
+  const allEmails = (ed.all_emails as string[] | undefined) || []
+  const hasEnrichedPhone = allPhones.length > 0
+  const hasWorkEmail = allEmails.some(e => {
+    const domain = e.split('@')[1]?.toLowerCase()
+    return domain && !PERSONAL_DOMAINS.has(domain)
+  })
+
+  switch (tool) {
+    case 'apollo':
+      return "No Apollo API key set up yet"
+    case 'lusha':
+      if (!linkedIn) return "Needs a LinkedIn URL or email to search — didn't have either"
+      return "No Lusha API key set up yet"
+    case 'pdl':
+      if (ed.title && hasEnrichedPhone) return "Apollo already found a job title and phone number, so we skipped this to save credits"
+      return "No People Data Labs API key set up yet"
+    case 'datagma':
+      if (!linkedIn) return "Needs a LinkedIn profile URL — we didn't find one for this person"
+      return "No Datagma API key set up yet"
+    case 'bettercontact':
+      if (hasEnrichedPhone) return "Already found phone numbers earlier — skipped to save credits"
+      return "No BetterContact API key set up yet"
+    case 'kaspr':
+      if (hasEnrichedPhone) return "Already found phone numbers earlier — skipped to save credits"
+      if (!linkedIn) return "Needs a LinkedIn URL — we didn't find one for this person"
+      return "No Kaspr API key set up yet"
+    case 'cognism':
+      if (hasEnrichedPhone) return "Already found phone numbers earlier — skipped to save credits"
+      return "No Cognism API key set up yet"
+    case 'contactout':
+      if (hasWorkEmail) return "Already has a work email address — no need to search"
+      if (!linkedIn) return "Needs a LinkedIn URL — we didn't find one for this person"
+      return "No ContactOut API key set up yet"
+    case 'hunter':
+      if (hasWorkEmail) return "Already has a work email address — no need to search"
+      return "No Hunter.io API key, or missing the person's full name and company website"
+    case 'dropcontact':
+      if (hasWorkEmail) return "Already has a work email address — no need to search"
+      return "No Dropcontact API key, or missing the person's name and company"
+    case 'findymail':
+      if (hasWorkEmail) return "Already has a work email address — no need to search"
+      if (!linkedIn) return "Needs a LinkedIn URL or name + company domain — didn't have enough info"
+      return "No Findymail API key set up yet"
+    case 'enrow':
+      if (allEmails.length === 0) return "No email addresses to verify — nothing to check"
+      return "No Enrow API key set up yet"
+    default:
+      return `No API key set up for ${TOOL_META[tool]?.label ?? tool}`
+  }
+}
+
 function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, unknown> }) {
   const ed = enrichedData
   const sourcesUsed = (ed.sources_used as string[] | undefined) || []
@@ -193,8 +249,11 @@ function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, un
                 <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clipRule="evenodd"/></svg>
                 {meta.label}
               </span>
-            : <span key={t} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border bg-gray-50 text-gray-400 border-gray-200">
+            : <span key={t} className="relative group inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border bg-gray-50 text-gray-400 border-gray-200 cursor-help">
                 — {meta.label}
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 w-52 rounded-md bg-gray-900 px-2.5 py-1.5 text-[10px] leading-relaxed text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg text-center">
+                  {getSkipReason(t, ed)}
+                </span>
               </span>
         })}
       </div>
