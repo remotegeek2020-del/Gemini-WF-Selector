@@ -134,6 +134,8 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
   const [notificationEmails, setNotificationEmails] = useState<string[]>([])
   const [notifEmailInput, setNotifEmailInput] = useState('')
   const [opportunityNameTemplate, setOpportunityNameTemplate] = useState('')
+  const [crmActions, setCrmActions] = useState<Record<string, string>>({})
+  const [configuredCrms, setConfiguredCrms] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (persona) {
@@ -170,11 +172,13 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       setAvatarUrl(persona.avatar_url || null)
       setNotificationEmails(persona.notification_emails || [])
       setOpportunityNameTemplate(persona.opportunity_name_template || '')
+      setCrmActions((persona.crm_actions as Record<string, string>) || {})
     } else {
       setForm(emptyForm)
       setAvatarUrl(null)
       setNotificationEmails([])
       setOpportunityNameTemplate('')
+      setCrmActions({})
     }
     setNotifEmailInput('')
     setErrors({})
@@ -209,6 +213,15 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
       .then((r) => r.json())
       .then((data) => setAiEnabled(data.enabled === true))
       .catch(() => setAiEnabled(false))
+
+    fetch(`/api/accounts/${accountId}/settings`)
+      .then((r) => r.json())
+      .then((data) => {
+        const keys: { service: string }[] = data.apiKeys || []
+        const crms = new Set(keys.map((k) => k.service).filter((s) => ['hubspot', 'zoho', 'pipedrive'].includes(s)))
+        setConfiguredCrms(crms)
+      })
+      .catch(() => {})
   }, [isOpen, accountId])
 
   const validate = (): boolean => {
@@ -260,6 +273,7 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
         pipeline: persona?.pipeline ?? pipeline,
         notification_emails: notificationEmails,
         opportunity_name_template: opportunityNameTemplate.trim() || null,
+        crm_actions: Object.keys(crmActions).length > 0 ? crmActions : null,
       })
       onClose()
     } catch (err) {
@@ -664,6 +678,67 @@ export default function PersonaForm({ isOpen, onClose, onSave, persona, accountI
             </div>
           )}
         </div>
+
+        {/* CRM Actions */}
+        {configuredCrms.size > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-1">CRM Actions</h4>
+            <p className="text-xs text-gray-500 mb-3">When a lead matches this persona, trigger these actions in your connected CRMs.</p>
+            <div className="space-y-3">
+              {configuredCrms.has('hubspot') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+                      HubSpot — List ID to enroll contact
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={crmActions.hubspot_list_id || ''}
+                    onChange={(e) => setCrmActions((prev) => ({ ...prev, hubspot_list_id: e.target.value }))}
+                    placeholder="e.g. 12345"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+              {configuredCrms.has('zoho') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                      Zoho CRM — Workflow ID to trigger
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={crmActions.zoho_workflow_id || ''}
+                    onChange={(e) => setCrmActions((prev) => ({ ...prev, zoho_workflow_id: e.target.value }))}
+                    placeholder="e.g. 4000000012345"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+              {configuredCrms.has('pipedrive') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-green-600 inline-block" />
+                      Pipedrive — Stage ID to move deal
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={crmActions.pipedrive_stage_id || ''}
+                    onChange={(e) => setCrmActions((prev) => ({ ...prev, pipedrive_stage_id: e.target.value }))}
+                    placeholder="e.g. 1"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Default toggle */}
         <div className="flex items-center justify-between py-2 px-3 bg-amber-50 border border-amber-200 rounded-lg">

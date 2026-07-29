@@ -66,6 +66,7 @@ export async function PUT(
     is_default,
     notification_emails,
     opportunity_name_template,
+    crm_actions,
   } = body
 
   const { data: existingPersona } = await supabase
@@ -121,6 +122,7 @@ export async function PUT(
       is_default: is_default === true,
       notification_emails: Array.isArray(notification_emails) ? notification_emails : [],
       opportunity_name_template: (opportunity_name_template as string) || null,
+      crm_actions: crm_actions || null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.personaId)

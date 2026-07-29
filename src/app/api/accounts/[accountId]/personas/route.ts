@@ -107,6 +107,7 @@ export async function POST(
     pipeline,
     notification_emails,
     opportunity_name_template,
+    crm_actions,
   } = body
 
   if (!name) {
@@ -162,6 +163,7 @@ export async function POST(
       pipeline: resolvedPipeline,
       notification_emails: Array.isArray(notification_emails) ? notification_emails : [],
       opportunity_name_template: (opportunity_name_template as string) || null,
+      crm_actions: crm_actions || null,
     })
     .select()
     .single()

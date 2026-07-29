@@ -54,6 +54,161 @@ function getPipelineLabel(pipeline: string): string {
   return labels[pipeline] || pipeline.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+const TOOL_META: Record<string, { label: string; phase: string; color: string; badgeCls: string }> = {
+  apollo:       { label: 'Apollo.io',        phase: 'Phase 1',  color: 'text-indigo-600', badgeCls: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+  lusha:        { label: 'Lusha',            phase: 'Phase 1',  color: 'text-indigo-500', badgeCls: 'bg-indigo-50 text-indigo-500 border-indigo-200' },
+  pdl:          { label: 'People Data Labs', phase: 'Phase 2',  color: 'text-blue-600',   badgeCls: 'bg-blue-50 text-blue-600 border-blue-200' },
+  datagma:      { label: 'Datagma',          phase: 'Phase 2',  color: 'text-blue-500',   badgeCls: 'bg-blue-50 text-blue-500 border-blue-200' },
+  bettercontact:{ label: 'BetterContact',    phase: 'Phase 3',  color: 'text-amber-600',  badgeCls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  kaspr:        { label: 'Kaspr',            phase: 'Phase 3',  color: 'text-amber-500',  badgeCls: 'bg-amber-50 text-amber-600 border-amber-200' },
+  cognism:      { label: 'Cognism',          phase: 'Phase 3',  color: 'text-amber-600',  badgeCls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  contactout:   { label: 'ContactOut',       phase: 'Phase 4',  color: 'text-emerald-600',badgeCls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  hunter:       { label: 'Hunter.io',        phase: 'Phase 4',  color: 'text-emerald-500',badgeCls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+  dropcontact:  { label: 'Dropcontact',      phase: 'Phase 4',  color: 'text-emerald-600',badgeCls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  findymail:    { label: 'Findymail',        phase: 'Phase 4',  color: 'text-emerald-500',badgeCls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+  enrow:        { label: 'Enrow',            phase: 'Phase 5',  color: 'text-purple-600', badgeCls: 'bg-purple-50 text-purple-700 border-purple-200' },
+}
+
+function renderEnrichVal(v: unknown): React.ReactNode {
+  if (v === null || v === undefined || v === '') return <span className="text-gray-400 italic text-xs">—</span>
+  if (Array.isArray(v)) {
+    if (v.length === 0) return <span className="text-gray-400 italic text-xs">none</span>
+    return (
+      <div className="space-y-0.5">
+        {v.map((item, i) =>
+          typeof item === 'object' && item !== null
+            ? <span key={i} className="block text-xs text-gray-700">{Object.entries(item as Record<string, unknown>).filter(([, val]) => val != null && val !== '').map(([ik, iv]) => `${ik.replace(/_/g,' ')}: ${iv}`).join(' · ')}</span>
+            : <span key={i} className="block text-xs text-gray-700">{String(item)}</span>
+        )}
+      </div>
+    )
+  }
+  if (typeof v === 'object') return <span className="text-xs text-gray-500 font-mono">{JSON.stringify(v)}</span>
+  return <span className="text-xs text-gray-800">{String(v)}</span>
+}
+
+function ToolSection({ tool, data }: { tool: string; data: Record<string, unknown> }) {
+  const meta = TOOL_META[tool]
+  const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))
+  if (entries.length === 0) return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className={`text-[10px] font-bold uppercase tracking-wider ${meta?.color ?? 'text-gray-500'}`}>{meta?.label ?? tool}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta?.badgeCls ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>{meta?.phase ?? ''}</span>
+      </div>
+      <p className="text-xs text-gray-400 italic">Ran — no data returned</p>
+    </div>
+  )
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className={`text-[10px] font-bold uppercase tracking-wider ${meta?.color ?? 'text-gray-500'}`}>{meta?.label ?? tool}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta?.badgeCls ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>{meta?.phase ?? ''}</span>
+      </div>
+      <dl className="space-y-1">
+        {entries.map(([k, v]) => (
+          <div key={k} className="flex gap-2">
+            <dt className="text-gray-500 text-xs capitalize shrink-0 min-w-[110px]">{k.replace(/^(apollo|lusha|pdl|datagma|bettercontact|kaspr|cognism|contactout|hunter|dropcontact|findymail|enrow)_/, '').replace(/_/g, ' ')}:</dt>
+            <dd>{renderEnrichVal(v)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+function getToolData(tool: string, ed: Record<string, unknown>): Record<string, unknown> | null {
+  switch (tool) {
+    case 'apollo': {
+      const raw = ed.apollo_raw as Record<string, unknown> | null
+      if (!raw) return Object.keys(ed).length ? { '(normalized)': 'no apollo_raw — see fields above' } : null
+      const skip = new Set(['id', 'photo_url', 'twitter_url', 'github_url', 'facebook_url', 'extrapolated_email_confidence', 'snippets_loaded', 'is_likely_to_engage', 'intent_strength', 'show_intent', 'revealed_for_current_team'])
+      return Object.fromEntries(Object.entries(raw).filter(([k]) => !skip.has(k)))
+    }
+    case 'lusha': {
+      const phones = ed.lusha_phones as string[] | undefined
+      const emails = ed.lusha_emails as string[] | undefined
+      return { phones: phones || [], emails: emails || [] }
+    }
+    case 'pdl': return (ed.pdl_raw as Record<string, unknown> | null) || { pdl_phones: ed.pdl_phones, pdl_emails: ed.pdl_emails }
+    case 'datagma': return (ed.datagma_raw as Record<string, unknown> | null) || { datagma_phones: ed.datagma_phones, datagma_email: ed.datagma_email }
+    case 'bettercontact': return { phones: ed.bettercontact_phones }
+    case 'kaspr': return { phones: ed.kaspr_phones }
+    case 'cognism': return { phones: ed.cognism_phones }
+    case 'contactout': return { emails: ed.contactout_emails }
+    case 'hunter': return { email: ed.hunter_email }
+    case 'dropcontact': return { email: ed.dropcontact_email }
+    case 'findymail': return { email: ed.findymail_email }
+    case 'enrow': return { verified_emails: ed.enrow_verified_emails }
+    default: return null
+  }
+}
+
+function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, unknown> }) {
+  const ed = enrichedData
+  const sourcesUsed = (ed.sources_used as string[] | undefined) || []
+  const sourcesSkipped = (ed.sources_skipped as string[] | undefined) || []
+  const hasWaterfall = sourcesUsed.length > 0 || sourcesSkipped.length > 0
+
+  // Legacy leads (no sources_used): fall back to old Apollo/Lusha display
+  if (!hasWaterfall) {
+    const apolloEntries = Object.entries(ed).filter(([k]) => !k.startsWith('lusha_') && k !== 'apollo_raw' && k !== 'lusha_raw')
+    const lushaEntries = Object.entries(ed).filter(([k]) => k.startsWith('lusha_') && k !== 'lusha_raw')
+    const hasLusha = 'lusha_raw' in ed
+    return (
+      <div className={`col-span-2 grid gap-4 ${hasLusha ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Apollo.io</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-600 border-indigo-200 font-medium">source</span>
+          </div>
+          <dl className="space-y-1">{apolloEntries.map(([k, v]) => <div key={k} className="flex gap-2"><dt className="text-gray-500 text-xs capitalize shrink-0 min-w-[110px]">{k.replace(/_/g,' ')}:</dt><dd>{renderEnrichVal(v)}</dd></div>)}</dl>
+        </div>
+        {hasLusha && (lushaEntries.length > 0
+          ? <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Lusha</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-500 border-indigo-200 font-medium">source</span>
+              </div>
+              <dl className="space-y-1">{lushaEntries.map(([k, v]) => <div key={k} className="flex gap-2"><dt className="text-gray-500 text-xs capitalize shrink-0 min-w-[110px]">{k.replace(/^lusha_/,'').replace(/_/g,' ')}:</dt><dd>{renderEnrichVal(v)}</dd></div>)}</dl>
+            </div>
+          : <div><div className="flex items-center gap-1.5 mb-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Lusha</span></div><p className="text-xs text-gray-400 italic">No contact found in Lusha database</p></div>
+        )}
+      </div>
+    )
+  }
+
+  const allTools = Object.keys(TOOL_META)
+  return (
+    <div className="col-span-2 space-y-3">
+      {/* Waterfall summary bar */}
+      <div className="flex flex-wrap gap-1.5 pb-2 border-b border-gray-100">
+        {allTools.map((t) => {
+          const used = sourcesUsed.includes(t)
+          const skipped = sourcesSkipped.includes(t)
+          if (!used && !skipped) return null
+          const meta = TOOL_META[t]
+          return used
+            ? <span key={t} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${meta.badgeCls}`}>
+                <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414 0L8 12.586 4.707 9.293a1 1 0 00-1.414 1.414l4 4a1 1 0 001.414 0l8-8a1 1 0 000-1.414z" clipRule="evenodd"/></svg>
+                {meta.label}
+              </span>
+            : <span key={t} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border bg-gray-50 text-gray-400 border-gray-200">
+                — {meta.label}
+              </span>
+        })}
+      </div>
+      {/* Per-tool sections for tools that ran */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        {sourcesUsed.map((tool) => {
+          const data = getToolData(tool, ed)
+          return data ? <ToolSection key={tool} tool={tool} data={data} /> : null
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline }: LeadsTableProps) {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
@@ -306,65 +461,9 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                               <p className="text-sm text-red-700">{lead.error_message}</p>
                             </div>
                           )}
-                          {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (() => {
-                            const raw = lead.enriched_data as Record<string, unknown>
-                            const apolloEntries = Object.entries(raw).filter(([k]) => !k.startsWith('lusha_') && k !== 'apollo_raw' && k !== 'lusha_raw')
-                            const lushaEntries = Object.entries(raw).filter(([k]) => k.startsWith('lusha_') && k !== 'lusha_raw')
-                            const hasLusha = 'lusha_raw' in raw
-
-                            const renderValue = (v: unknown) => {
-                              if (Array.isArray(v)) {
-                                if (v.length === 0) return <span className="text-gray-400 italic">None found</span>
-                                return (
-                                  <div className="space-y-0.5">
-                                    {v.map((item, i) =>
-                                      typeof item === 'object' && item !== null
-                                        ? <span key={i} className="block text-xs">{Object.entries(item as Record<string, unknown>).filter(([, val]) => val).map(([ik, iv]) => `${ik}: ${iv}`).join(' · ')}</span>
-                                        : <span key={i} className="block">{String(item)}</span>
-                                    )}
-                                  </div>
-                                )
-                              }
-                              if (typeof v === 'object' && v !== null) return <span className="text-xs">{JSON.stringify(v)}</span>
-                              return <span>{String(v ?? '—')}</span>
-                            }
-
-                            const renderSection = (entries: [string, unknown][], label: string, color: string, badge: string) => (
-                              <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h4 className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{label}</h4>
-                                  <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badge}`}>source</span>
-                                </div>
-                                <dl className="text-sm space-y-1">
-                                  {entries.map(([k, v]) => (
-                                    <div key={k} className="flex gap-2">
-                                      <dt className="text-gray-500 capitalize min-w-[130px] shrink-0">{k.replace(/^lusha_/, '').replace(/_/g, ' ')}:</dt>
-                                      <dd className="text-gray-800">{renderValue(v)}</dd>
-                                    </div>
-                                  ))}
-                                </dl>
-                              </div>
-                            )
-
-                            return (
-                              <div className={`col-span-2 grid gap-4 ${hasLusha ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                {renderSection(apolloEntries, 'Apollo.io', 'text-blue-600', 'bg-blue-50 text-blue-600')}
-                                {hasLusha && (
-                                  lushaEntries.length > 0
-                                    ? renderSection(lushaEntries, 'Lusha', 'text-purple-600', 'bg-purple-50 text-purple-600')
-                                    : (
-                                      <div>
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <h4 className="text-xs font-semibold uppercase tracking-wide text-purple-600">Lusha</h4>
-                                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-purple-50 text-purple-600">source</span>
-                                        </div>
-                                        <p className="text-sm text-gray-400 italic">No contact found in Lusha database</p>
-                                      </div>
-                                    )
-                                )}
-                              </div>
-                            )
-                          })()}
+                          {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (
+                            <EnrichmentWaterfall enrichedData={lead.enriched_data} />
+                          )}
                         </div>
                       </td>
                     </tr>

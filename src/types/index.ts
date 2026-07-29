@@ -96,6 +96,7 @@ export interface Persona {
   highlevel_pipeline_name: string | null
   highlevel_stage_id: string | null
   highlevel_stage_name: string | null
+  crm_actions: Record<string, string> | null
   color: string
   is_default: boolean
   pipeline: string
