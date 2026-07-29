@@ -138,10 +138,11 @@ export async function runEnrichmentPipeline(
     sources_skipped.push('lusha')
   }
 
-  // ── Phase 2a: PDL (fallback when Apollo found no title/company, OR missing phones) ─
+  // ── Phase 2a: PDL (fallback when Apollo found no title/company, OR no enriched phones) ─
+  // Note: don't count the form-submitted phone — only enrichment-sourced phones count here
   const apolloFoundProfile = !!(ed.title || ed.current_company)
-  const hasPhone = getAllPhones(ed, lead.phone).length > 0
-  if (keys.pdl && (!apolloFoundProfile || !hasPhone)) {
+  const hasEnrichedPhone = getAllPhones(ed, null).length > 0
+  if (keys.pdl && (!apolloFoundProfile || !hasEnrichedPhone)) {
     const pdlResult = await pdlEnrichPerson(keys.pdl, {
       email: lead.email,
       phone: lead.phone,
