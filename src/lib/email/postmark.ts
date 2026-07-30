@@ -96,6 +96,11 @@ function getToolContribution(tool: string, ed: Record<string, unknown>): string[
       if (phones.length) items.push(`${phones.length} phone${phones.length > 1 ? 's' : ''}`)
       if (emails.length) items.push(`${emails.length} email${emails.length > 1 ? 's' : ''}`)
       if (ed.pdl_location) items.push(`Location: ${ed.pdl_location}`)
+      if (ed.pdl_title_role) items.push(`Role: ${ed.pdl_title_role}${ed.pdl_title_sub_role ? ` / ${ed.pdl_title_sub_role}` : ''}`)
+      if (ed.pdl_company_size) items.push(`Co. size: ${ed.pdl_company_size}`)
+      if (ed.pdl_last_verified) items.push(`Verified: ${String(ed.pdl_last_verified).substring(0, 10)}`)
+      const exp = (ed.pdl_experience as unknown[] | undefined) || []
+      if (exp.length) items.push(`${exp.length} job${exp.length > 1 ? 's' : ''} in history`)
       break
     }
     case 'datagma': {
@@ -252,10 +257,28 @@ export async function sendLeadNotification(
   const pdlLocation = ed.pdl_location as string | undefined
   const pdlIndustry = ed.pdl_industry as string | undefined
   const pdlInferred = (ed.pdl_raw as Record<string, unknown> | undefined)?.inferred_salary as string | undefined
+  const pdlTitleRole = ed.pdl_title_role as string | undefined
+  const pdlTitleSubRole = ed.pdl_title_sub_role as string | undefined
+  const pdlCompanySize = ed.pdl_company_size as string | undefined
+  const pdlCompanyLinkedin = ed.pdl_company_linkedin as string | undefined
+  const pdlCompanyLocation = ed.pdl_company_location as string | undefined
+  const pdlLastVerified = ed.pdl_last_verified as string | undefined
+  type PDLExp = { company?: { name?: string; size?: string; linkedin_url?: string; location?: { name?: string } }; title?: { name?: string; role?: string; sub_role?: string }; is_primary?: boolean; start_date?: string | null; end_date?: string | null }
+  const pdlExperience = (ed.pdl_experience as PDLExp[] | undefined) || []
 
-  // Employment history — filter out our own company so leads don't show us as their employer
-  const employment = ((ed.employment_history as { company?: string; title?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined) || [])
+  // Employment history — Apollo first, fall back to PDL experience
+  const apolloEmployment = ((ed.employment_history as { company?: string; title?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined) || [])
     .filter((e) => !e.company?.toLowerCase().includes('payprotec'))
+  const pdlEmploymentConverted = pdlExperience
+    .filter((e) => e.company?.name && !e.company?.name?.toLowerCase().includes('payprotec'))
+    .map((e) => ({
+      company: e.company?.name || '',
+      title: e.title?.name || '',
+      current: !!(e.is_primary),
+      start_date: e.start_date || undefined,
+      end_date: e.end_date || undefined,
+    }))
+  const employment = apolloEmployment.length > 0 ? apolloEmployment : pdlEmploymentConverted
 
   // LinkedIn — prefer caller-supplied, fall back to enrichedData directly
   const effectiveLinkedin =
@@ -269,18 +292,18 @@ export async function sendLeadNotification(
   const twitterUrl = apolloRaw.twitter_url as string | undefined
   const githubUrl = apolloRaw.github_url as string | undefined
   const facebookUrl = apolloRaw.facebook_url as string | undefined
-  const orgLinkedin = (org.linkedin_url || ed.company_linkedin_url) as string | undefined
   const orgWebsite = (org.website_url || ed.company_website) as string | undefined
 
-  // Company details
-  const employees = (org.estimated_num_employees || ed.company_size) as string | number | undefined
+  // Company details — Apollo first, PDL as fallback
+  const employees = (org.estimated_num_employees || ed.company_size || pdlCompanySize) as string | number | undefined
   const revenue = (org.annual_revenue_printed || ed.company_revenue) as string | undefined
   const funding = (org.total_funding_printed || ed.company_funding) as string | undefined
   const founded = (org.founded_year || ed.company_founded) as string | number | undefined
   const companyCity = org.city as string | undefined
   const companyState = org.state as string | undefined
   const companyCountry = org.country as string | undefined
-  const companyLocation = [companyCity, companyState, companyCountry].filter(Boolean).join(', ')
+  const apolloCompanyLocation = [companyCity, companyState, companyCountry].filter(Boolean).join(', ')
+  const companyLocation = apolloCompanyLocation || pdlCompanyLocation || ''
   const personLocation = (ed.location as string | undefined) || pdlLocation
   const seniority = ed.seniority as string | undefined
   const headline = ed.headline as string | undefined
@@ -288,11 +311,13 @@ export async function sendLeadNotification(
   const departments = (apolloRaw.departments as string[] | undefined)?.join(', ')
   const photoUrl = apolloRaw.photo_url as string | undefined
   const orgPhone = (org.primary_phone as { number?: string } | undefined)?.number || (org.sanitized_phone as string | undefined)
+  const orgLinkedin = (org.linkedin_url || ed.company_linkedin_url || pdlCompanyLinkedin) as string | undefined
 
   // Build HTML sections — title/company fallback chain: caller > ed > lusha > pdl
   const effectiveTitle = lead.title || (ed.title as string | undefined) || lushaTitle || pdlTitle
   const effectiveCompany = lead.company || (ed.current_company as string | undefined) || lushaCompany || pdlCompany
   const effectiveIndustry = (org.industry as string | undefined) || pdlIndustry
+  const roleClassification = [pdlTitleRole, pdlTitleSubRole].filter(Boolean).join(' / ')
 
   const emailCells = allEmails.map((e) => {
     const isVerified = verifiedEmailSet.has(e)
@@ -310,8 +335,10 @@ export async function sendLeadNotification(
     effectiveTitle ? row('Title', effectiveTitle) : '',
     departments ? row('Department', departments) : '',
     seniority ? row('Seniority', seniority) : '',
+    roleClassification ? row('Role Type', roleClassification) : '',
     personLocation ? row('Location', String(personLocation)) : '',
     pdlInferred ? row('Est. Salary', pdlInferred) : '',
+    pdlLastVerified ? row('PDL Verified', String(pdlLastVerified).substring(0, 10)) : '',
     headline ? row('Headline', String(headline)) : '',
     effectiveLinkedin ? row('LinkedIn', 'View Profile →', effectiveLinkedin) : '',
     twitterUrl ? row('Twitter', 'View Profile', twitterUrl) : '',
@@ -422,7 +449,9 @@ export async function sendLeadNotification(
     effectiveTitle ? `Title: ${effectiveTitle}` : '',
     departments ? `Department: ${departments}` : '',
     seniority ? `Seniority: ${seniority}` : '',
+    roleClassification ? `Role Type: ${roleClassification}` : '',
     personLocation ? `Location: ${personLocation}` : '',
+    pdlLastVerified ? `PDL Verified: ${String(pdlLastVerified).substring(0, 10)}` : '',
     headline ? `Headline: ${headline}` : '',
     effectiveLinkedin ? `LinkedIn: ${effectiveLinkedin}` : '',
     twitterUrl ? `Twitter: ${twitterUrl}` : '',
