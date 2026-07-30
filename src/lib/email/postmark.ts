@@ -19,6 +19,7 @@ interface LeadNotificationData {
   leadId?: string
   accountId?: string
   appBaseUrl?: string
+  isReenrich?: boolean
 }
 
 function extractAttribution(rawData?: Record<string, unknown>): Record<string, string> {
@@ -462,7 +463,7 @@ export async function sendLeadNotification(
     body: JSON.stringify({
       From: fromEmail,
       To: toEmails.join(','),
-      Subject: `New Lead: ${name} → ${lead.personaName}`,
+      Subject: lead.isReenrich ? `Re-enriched: ${name} → ${lead.personaName}` : `New Lead: ${name} → ${lead.personaName}`,
       HtmlBody: htmlBody,
       TextBody: textBody,
       MessageStream: 'outbound',

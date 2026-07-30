@@ -278,6 +278,7 @@ export async function POST(
             leadId: leadId,
             accountId: accountId,
             appBaseUrl: process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ''),
+            isReenrich: true,
           })
         } catch (e) {
           console.error('[Email] notification failed:', e)
