@@ -1,3 +1,5 @@
+import { createAdminClient } from '@/lib/supabase/server'
+
 interface LeadNotificationData {
   firstName?: string
   lastName?: string
@@ -476,21 +478,44 @@ export async function sendLeadNotification(
 
   const subject = lead.isReenrich ? `Re-enriched: ${name} → ${lead.personaName}` : `New Lead: ${name} → ${lead.personaName}`
 
-  // Send one email per recipient so each gets a personalized magic-link button
+  // Send one email per recipient so each gets a unique one-time magic link.
+  // The link is generated at send time — no email address in the URL, so
+  // forwarding the email gives the forwardee an expired/already-used link.
   const sends = toEmails.map(async (recipientEmail) => {
-    const magicLinkUrl = leadUrl && lead.appBaseUrl
-      ? `${lead.appBaseUrl}/api/auth/email-link?email=${encodeURIComponent(recipientEmail)}&redirect=${encodeURIComponent(leadUrl)}`
-      : leadUrl
+    let viewButtonUrl: string | null = null
 
-    const viewButtonHtml = magicLinkUrl
+    if (leadUrl && lead.appBaseUrl) {
+      try {
+        const admin = createAdminClient()
+        const parsedLead = new URL(leadUrl)
+        const leadPath = parsedLead.pathname + parsedLead.search
+        const callbackUrl = `${lead.appBaseUrl}/auth/callback?next=${encodeURIComponent(leadPath)}`
+
+        const { data, error } = await admin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: recipientEmail,
+          options: { redirectTo: callbackUrl },
+        })
+
+        if (error) {
+          console.warn(`[email] magic link failed for ${recipientEmail} (not a user?):`, error.message)
+        } else if (data?.properties?.action_link) {
+          viewButtonUrl = data.properties.action_link
+        }
+      } catch (err) {
+        console.error(`[email] magic link exception for ${recipientEmail}:`, err)
+      }
+    }
+
+    const viewButtonHtml = viewButtonUrl
       ? `<div style="text-align:center;margin:16px 0 8px;">
-          <a href="${magicLinkUrl}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
+          <a href="${viewButtonUrl}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
             See in Lead Router →
           </a>
         </div>`
       : ''
 
-    const perRecipientText = magicLinkUrl ? `${textBody}\nView this lead in Lead Router: ${magicLinkUrl}\n` : textBody
+    const perRecipientText = viewButtonUrl ? `${textBody}\nView this lead in Lead Router: ${viewButtonUrl}\n` : textBody
 
     const res = await fetch('https://api.postmarkapp.com/email', {
       method: 'POST',
