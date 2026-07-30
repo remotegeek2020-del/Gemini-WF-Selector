@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Lead } from '@/types'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -270,20 +270,154 @@ function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, un
   )
 }
 
+function LeadDetailContent({ lead }: { lead: Lead }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 items-start">
+      {lead.attribution && Object.keys(lead.attribution).length > 0 && (
+        <div className="col-span-2">
+          <h4 className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2">Attribution</h4>
+          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+            {lead.attribution.campaign && (<><dt className="text-gray-500 text-xs">Campaign</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.campaign}</dd></>)}
+            {lead.attribution.utmContent && (<><dt className="text-gray-500 text-xs">Ad</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.utmContent}</dd></>)}
+            {lead.attribution.utmMedium && (<><dt className="text-gray-500 text-xs">Ad Set</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.utmMedium}</dd></>)}
+            {lead.attribution.formName && (<><dt className="text-gray-500 text-xs">Form</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.formName}</dd></>)}
+            {lead.attribution.sessionSource && (<><dt className="text-gray-500 text-xs">Session Source</dt><dd className="text-gray-800 text-xs font-medium">{lead.attribution.sessionSource}</dd></>)}
+            {lead.attribution.adId && (<><dt className="text-gray-500 text-xs">Ad ID</dt><dd className="text-gray-800 text-xs font-mono">{lead.attribution.adId}</dd></>)}
+          </dl>
+        </div>
+      )}
+      {lead.is_hot && lead.hot_reasoning && (
+        <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">🔥</span>
+            <h4 className="text-xs font-semibold text-orange-700 uppercase tracking-wide">AI: High-Priority Lead</h4>
+          </div>
+          <p className="text-sm text-orange-900">{lead.hot_reasoning}</p>
+          <p className="text-xs text-orange-500 italic mt-1">AI assessment only — use as a guide. Your judgment is final.</p>
+        </div>
+      )}
+      {lead.persona_reasoning && (
+        <div>
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">AI Reasoning</h4>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{lead.persona_reasoning}</p>
+        </div>
+      )}
+      {lead.error_message && (
+        <div>
+          <h4 className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1">Error</h4>
+          <p className="text-sm text-red-700">{lead.error_message}</p>
+        </div>
+      )}
+      {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (
+        <EnrichmentWaterfall enrichedData={lead.enriched_data} />
+      )}
+    </div>
+  )
+}
+
+function LeadModal({ lead, onClose, onEnrich, onDelete, enrichingIds, deletingIds }: {
+  lead: Lead
+  onClose: () => void
+  onEnrich?: (id: string) => Promise<void>
+  onDelete?: (id: string, name: string) => Promise<void>
+  enrichingIds: Set<string>
+  deletingIds: Set<string>
+}) {
+  const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Unknown'
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', handler)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8" role="dialog" aria-modal="true">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col mt-8">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            {lead.is_hot && <span title="AI-flagged high-priority" className="text-lg leading-none">🔥</span>}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-gray-900 truncate">{name !== 'Unknown' ? name : <span className="text-gray-400 italic">Unknown</span>}</h2>
+                <StatusBadge status={lead.status} />
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                {lead.personas && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: lead.personas.color || '#6366f1' }} />
+                    {lead.personas.name}
+                  </span>
+                )}
+                {lead.email && <span className="text-xs text-gray-400">{lead.email}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-4">
+            {onEnrich && (
+              <Button size="sm" variant="secondary" isLoading={enrichingIds.has(lead.id)} onClick={() => onEnrich(lead.id)}>
+                {lead.status === 'pending' ? 'Enrich' : 'Re-enrich'}
+              </Button>
+            )}
+            {onDelete && (
+              <Button size="sm" variant="danger" isLoading={deletingIds.has(lead.id)} onClick={() => onDelete(lead.id, name)}>
+                Delete
+              </Button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto p-6">
+          <LeadDetailContent lead={lead} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline, initialExpandedId }: LeadsTableProps) {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
-  const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId || null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [modalLeadId, setModalLeadId] = useState<string | null>(initialExpandedId || null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
-  const highlightRowRef = useRef<HTMLTableRowElement>(null)
 
-  // Scroll to the highlighted lead when it's available
+  // Open modal when URL param provides a lead ID
   useEffect(() => {
-    if (initialExpandedId && highlightRowRef.current) {
-      setTimeout(() => highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150)
+    if (initialExpandedId) {
+      setModalLeadId(initialExpandedId)
     }
-  }, [initialExpandedId, leads.length])
+  }, [initialExpandedId])
+
+  const closeModal = useCallback(() => {
+    setModalLeadId(null)
+    // Remove ?lead= from URL without a page reload
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('lead')
+      window.history.replaceState(null, '', url.toString())
+    }
+  }, [])
 
   const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id))
   const someSelected = leads.some((l) => selectedIds.has(l.id))
@@ -319,8 +453,10 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
     if (!onDelete) return
     if (!confirm(`Delete lead "${name}"? This cannot be undone.`)) return
     setDeletingIds((prev) => new Set(prev).add(leadId))
-    try { await onDelete(leadId) }
-    finally {
+    try {
+      await onDelete(leadId)
+      if (modalLeadId === leadId) closeModal()
+    } finally {
       setDeletingIds((prev) => { const n = new Set(prev); n.delete(leadId); return n })
     }
   }
@@ -337,6 +473,8 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
     }
   }
 
+  const modalLead = modalLeadId ? leads.find((l) => l.id === modalLeadId) : null
+
   if (leads.length === 0) {
     return (
       <div className="text-center py-16">
@@ -351,6 +489,16 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
 
   return (
     <div className="relative">
+      {modalLead && (
+        <LeadModal
+          lead={modalLead}
+          onClose={closeModal}
+          onEnrich={onEnrich ? handleEnrich : undefined}
+          onDelete={onDelete ? handleDelete : undefined}
+          enrichingIds={enrichingIds}
+          deletingIds={deletingIds}
+        />
+      )}
       {/* Bulk action bar */}
       {someSelected && (
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2.5 bg-indigo-600 text-white text-sm rounded-t-lg">
@@ -413,8 +561,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                 <>
                   <tr
                     key={lead.id}
-                    ref={lead.id === initialExpandedId ? highlightRowRef : undefined}
-                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : ''} ${lead.id === initialExpandedId ? 'ring-2 ring-indigo-400 ring-inset' : ''}`}
+                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : ''}`}
                     onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
                   >
                     {onBulkDelete && (
@@ -483,58 +630,7 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                   {expandedId === lead.id && (
                     <tr key={`${lead.id}-expanded`} className="bg-gray-50">
                       <td colSpan={colSpan} className="px-4 py-4">
-                        <div className="grid grid-cols-2 gap-4 items-start">
-                          {lead.attribution && Object.keys(lead.attribution).length > 0 && (
-                            <div className="col-span-2">
-                              <h4 className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2">Attribution</h4>
-                              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-1 text-sm">
-                                {lead.attribution.campaign && (
-                                  <><dt className="text-gray-500 text-xs">Campaign</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.campaign}</dd></>
-                                )}
-                                {lead.attribution.utmContent && (
-                                  <><dt className="text-gray-500 text-xs">Ad</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.utmContent}</dd></>
-                                )}
-                                {lead.attribution.utmMedium && (
-                                  <><dt className="text-gray-500 text-xs">Ad Set</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.utmMedium}</dd></>
-                                )}
-                                {lead.attribution.formName && (
-                                  <><dt className="text-gray-500 text-xs">Form</dt><dd className="text-gray-800 text-xs font-medium truncate">{lead.attribution.formName}</dd></>
-                                )}
-                                {lead.attribution.sessionSource && (
-                                  <><dt className="text-gray-500 text-xs">Session Source</dt><dd className="text-gray-800 text-xs font-medium">{lead.attribution.sessionSource}</dd></>
-                                )}
-                                {lead.attribution.adId && (
-                                  <><dt className="text-gray-500 text-xs">Ad ID</dt><dd className="text-gray-800 text-xs font-mono">{lead.attribution.adId}</dd></>
-                                )}
-                              </dl>
-                            </div>
-                          )}
-                          {lead.is_hot && lead.hot_reasoning && (
-                            <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-base">🔥</span>
-                                <h4 className="text-xs font-semibold text-orange-700 uppercase tracking-wide">AI: High-Priority Lead</h4>
-                              </div>
-                              <p className="text-sm text-orange-900">{lead.hot_reasoning}</p>
-                              <p className="text-xs text-orange-500 italic mt-1">AI assessment only — use as a guide. Your judgment is final.</p>
-                            </div>
-                          )}
-                          {lead.persona_reasoning && (
-                            <div>
-                              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">AI Reasoning</h4>
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{lead.persona_reasoning}</p>
-                            </div>
-                          )}
-                          {lead.error_message && (
-                            <div>
-                              <h4 className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1">Error</h4>
-                              <p className="text-sm text-red-700">{lead.error_message}</p>
-                            </div>
-                          )}
-                          {lead.enriched_data && Object.keys(lead.enriched_data).length > 0 && (
-                            <EnrichmentWaterfall enrichedData={lead.enriched_data} />
-                          )}
-                        </div>
+                        <LeadDetailContent lead={lead} />
                       </td>
                     </tr>
                   )}
