@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Lead } from '@/types'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ interface LeadsTableProps {
   onDelete?: (leadId: string) => Promise<void>
   onBulkDelete?: (ids: string[]) => Promise<void>
   showPipeline?: boolean
+  initialExpandedId?: string | null
 }
 
 function formatDate(dateStr: string): string {
@@ -269,12 +270,20 @@ function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, un
   )
 }
 
-export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline }: LeadsTableProps) {
+export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline, initialExpandedId }: LeadsTableProps) {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId || null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+  const highlightRowRef = useRef<HTMLTableRowElement>(null)
+
+  // Scroll to the highlighted lead when it's available
+  useEffect(() => {
+    if (initialExpandedId && highlightRowRef.current) {
+      setTimeout(() => highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150)
+    }
+  }, [initialExpandedId, leads.length])
 
   const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id))
   const someSelected = leads.some((l) => selectedIds.has(l.id))
@@ -404,7 +413,8 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
                 <>
                   <tr
                     key={lead.id}
-                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : ''}`}
+                    ref={lead.id === initialExpandedId ? highlightRowRef : undefined}
+                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : ''} ${lead.id === initialExpandedId ? 'ring-2 ring-indigo-400 ring-inset' : ''}`}
                     onClick={() => setExpandedId(expandedId === lead.id ? null : lead.id)}
                   >
                     {onBulkDelete && (

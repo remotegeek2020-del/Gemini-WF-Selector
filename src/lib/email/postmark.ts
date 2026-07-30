@@ -16,6 +16,9 @@ interface LeadNotificationData {
   source?: string
   rawData?: Record<string, unknown>
   enrichedData?: Record<string, unknown>
+  leadId?: string
+  accountId?: string
+  appBaseUrl?: string
 }
 
 function extractAttribution(rawData?: Record<string, unknown>): Record<string, string> {
@@ -358,6 +361,18 @@ export async function sendLeadNotification(
   </div>`
     : ''
 
+  const leadUrl = lead.leadId && lead.appBaseUrl
+    ? `${lead.appBaseUrl}/accounts/${lead.accountId}/dashboard?lead=${lead.leadId}`
+    : null
+
+  const viewButtonHtml = leadUrl
+    ? `<div style="text-align:center;margin:20px 0 4px;">
+        <a href="${leadUrl}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
+          See in Lead Router →
+        </a>
+      </div>`
+    : ''
+
   const htmlBody = `
 <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f9fafb;padding:24px;">
   ${hotBannerHtml}
@@ -386,6 +401,8 @@ export async function sendLeadNotification(
       <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">AI Reasoning</p>
       <p style="margin:0;font-size:13px;color:#374151;white-space:pre-line;">${lead.reasoning}</p>
     </div>
+
+    ${viewButtonHtml}
   </div>
   <p style="text-align:center;margin-top:16px;font-size:11px;color:#9ca3af;">Sent by Lead Router</p>
 </div>`
@@ -431,6 +448,8 @@ export async function sendLeadNotification(
     '',
     '--- AI REASONING ---',
     lead.reasoning,
+    '',
+    leadUrl ? `View this lead in Lead Router: ${leadUrl}` : '',
   ].filter((l) => l !== null && l !== undefined).join('\n')
 
   const res = await fetch('https://api.postmarkapp.com/email', {

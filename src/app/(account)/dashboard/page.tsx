@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Lead, Pipeline } from '@/types'
 import LeadsTable from '@/components/leads-table'
@@ -8,6 +9,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 export default function SubAccountDashboardPage() {
+  const searchParams = useSearchParams()
+  const leadFromUrl = searchParams.get('lead')
   const [accountId, setAccountId] = useState<string | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
   const [total, setTotal] = useState(0)
@@ -176,7 +179,7 @@ export default function SubAccountDashboardPage() {
               </svg>
             </div>
           ) : (
-            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} onBulkDelete={handleBulkDelete} showPipeline={activePipeline === 'all'} />
+            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} onBulkDelete={handleBulkDelete} showPipeline={activePipeline === 'all'} initialExpandedId={leadFromUrl} />
           )}
         </CardContent>
       </Card>
