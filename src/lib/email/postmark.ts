@@ -393,20 +393,13 @@ export async function sendLeadNotification(
     ? `${lead.appBaseUrl}/accounts/${lead.accountId}/dashboard?lead=${lead.leadId}`
     : null
 
-  const viewButtonHtml = leadUrl
-    ? `<div style="text-align:center;margin:20px 0 4px;">
-        <a href="${leadUrl}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
-          See in Lead Router →
-        </a>
-      </div>`
-    : ''
-
-  const htmlBody = `
+  // Build body content that is the same for every recipient
+  const bodyContent = (viewButtonHtml: string) => `
 <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f9fafb;padding:24px;">
   ${hotBannerHtml}
   <div style="background:#fff;border-radius:8px;padding:24px;border:1px solid #e5e7eb;">
 
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">
       ${photoUrl ? `<img src="${photoUrl}" alt="${name}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #e5e7eb;">` : `<div style="width:52px;height:52px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">👤</div>`}
       <div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
@@ -417,6 +410,8 @@ export async function sendLeadNotification(
         <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Assigned to <strong>${lead.personaName}</strong> · ${score}</p>
       </div>
     </div>
+
+    ${viewButtonHtml}
 
     ${section('Contact Info', contactRows)}
     ${companyRows.trim() ? section('Company Intelligence', companyRows) : ''}
@@ -429,8 +424,6 @@ export async function sendLeadNotification(
       <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;">AI Reasoning</p>
       <p style="margin:0;font-size:13px;color:#374151;white-space:pre-line;">${lead.reasoning}</p>
     </div>
-
-    ${viewButtonHtml}
   </div>
   <p style="text-align:center;margin-top:16px;font-size:11px;color:#9ca3af;">Sent by Lead Router</p>
 </div>`
@@ -479,28 +472,48 @@ export async function sendLeadNotification(
     '--- AI REASONING ---',
     lead.reasoning,
     '',
-    leadUrl ? `View this lead in Lead Router: ${leadUrl}` : '',
   ].filter((l) => l !== null && l !== undefined).join('\n')
 
-  const res = await fetch('https://api.postmarkapp.com/email', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'X-Postmark-Server-Token': postmarkKey,
-    },
-    body: JSON.stringify({
-      From: fromEmail,
-      To: toEmails.join(','),
-      Subject: lead.isReenrich ? `Re-enriched: ${name} → ${lead.personaName}` : `New Lead: ${name} → ${lead.personaName}`,
-      HtmlBody: htmlBody,
-      TextBody: textBody,
-      MessageStream: 'outbound',
-    }),
+  const subject = lead.isReenrich ? `Re-enriched: ${name} → ${lead.personaName}` : `New Lead: ${name} → ${lead.personaName}`
+
+  // Send one email per recipient so each gets a personalized magic-link button
+  const sends = toEmails.map(async (recipientEmail) => {
+    const magicLinkUrl = leadUrl && lead.appBaseUrl
+      ? `${lead.appBaseUrl}/api/auth/email-link?email=${encodeURIComponent(recipientEmail)}&redirect=${encodeURIComponent(leadUrl)}`
+      : leadUrl
+
+    const viewButtonHtml = magicLinkUrl
+      ? `<div style="text-align:center;margin:16px 0 8px;">
+          <a href="${magicLinkUrl}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
+            See in Lead Router →
+          </a>
+        </div>`
+      : ''
+
+    const perRecipientText = magicLinkUrl ? `${textBody}\nView this lead in Lead Router: ${magicLinkUrl}\n` : textBody
+
+    const res = await fetch('https://api.postmarkapp.com/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-Postmark-Server-Token': postmarkKey,
+      },
+      body: JSON.stringify({
+        From: fromEmail,
+        To: recipientEmail,
+        Subject: subject,
+        HtmlBody: bodyContent(viewButtonHtml),
+        TextBody: perRecipientText,
+        MessageStream: 'outbound',
+      }),
+    })
+
+    if (!res.ok) {
+      const body = await res.text()
+      console.error(`[Email] failed to send to ${recipientEmail}: ${res.status} ${body}`)
+    }
   })
 
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Postmark API error ${res.status}: ${body}`)
-  }
+  await Promise.all(sends)
 }
