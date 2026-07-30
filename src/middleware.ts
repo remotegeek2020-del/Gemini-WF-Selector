@@ -28,6 +28,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Allow magic link entry point and auth callback — these handle their own auth
+  if (pathname === '/api/auth/email-link' || pathname === '/auth/callback') {
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
