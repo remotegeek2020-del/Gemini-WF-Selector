@@ -46,7 +46,7 @@ export async function pdlEnrichPerson(
       pdl_title: person.job_title,
       pdl_company: person.job_company_name,
       pdl_linkedin: person.linkedin_url,
-      pdl_phones: person.phone_numbers || [],
+      pdl_phones: Array.isArray(person.phone_numbers) ? person.phone_numbers : [],
       pdl_emails: allEmails,
       pdl_industry: person.industry,
       pdl_location: person.location_name,

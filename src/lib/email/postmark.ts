@@ -213,24 +213,41 @@ export async function sendLeadNotification(
   // Attribution from HL webhook payload
   const attribution = extractAttribution(lead.rawData)
 
-  // Phone numbers — Lusha stores as lusha_phones (string[]), Apollo in apollo_raw.phone_numbers
-  const lushaPhones = (ed.lusha_phones as string[] | undefined) || []
-  const apolloPhones = (apolloRaw.phone_numbers as { sanitized_number?: string; type?: string }[] | undefined) || []
-  const allPhones: string[] = [...lushaPhones]
-  for (const p of apolloPhones) {
-    const num = p.sanitized_number
-    if (num && !allPhones.some((x) => x.includes(num.replace(/\D/g, '').slice(-7)))) {
-      allPhones.push(`${num}${p.type ? ` (${p.type})` : ''}`)
-    }
-  }
-  if (lead.phone && !allPhones.some((x) => x.includes(lead.phone!.replace(/\D/g, '').slice(-7)))) {
-    allPhones.unshift(lead.phone)
-  }
+  // Phone numbers — use consolidated all_phones from pipeline (covers all 12 tools)
+  // Fall back to manual assembly for legacy leads without pipeline waterfall data
+  const consolidatedPhones = (ed.all_phones as string[] | undefined) || []
+  const allPhones: string[] = consolidatedPhones.length > 0
+    ? consolidatedPhones
+    : (() => {
+        const phones: string[] = []
+        if (lead.phone) phones.push(lead.phone)
+        const lp = (ed.lusha_phones as string[] | undefined) || []
+        const ap = (apolloRaw.phone_numbers as { sanitized_number?: string }[] | undefined) || []
+        phones.push(...lp)
+        for (const p of ap) {
+          if (p.sanitized_number && !phones.some((x) => x.includes(p.sanitized_number!.replace(/\D/g, '').slice(-7)))) {
+            phones.push(p.sanitized_number)
+          }
+        }
+        return phones
+      })()
 
-  // Lusha emails (direct emails found by Lusha)
-  const lushaEmails = (ed.lusha_emails as string[] | undefined) || []
+  // Emails — use consolidated all_emails from pipeline (covers all 12 tools)
+  const consolidatedEmails = (ed.all_emails as string[] | undefined) || []
+  const verifiedEmailSet = new Set((ed.verified_emails as string[] | undefined) || [])
+  const allEmails: string[] = consolidatedEmails.length > 0
+    ? consolidatedEmails
+    : Array.from(new Set([lead.email, ...((ed.lusha_emails as string[] | undefined) || [])].filter(Boolean))) as string[]
+
   const lushaTitle = ed.lusha_current_title as string | undefined
   const lushaCompany = ed.lusha_current_company as string | undefined
+
+  // PDL supplementary fields
+  const pdlTitle = ed.pdl_title as string | undefined
+  const pdlCompany = ed.pdl_company as string | undefined
+  const pdlLocation = ed.pdl_location as string | undefined
+  const pdlIndustry = ed.pdl_industry as string | undefined
+  const pdlInferred = (ed.pdl_raw as Record<string, unknown> | undefined)?.inferred_salary as string | undefined
 
   // Employment history — filter out our own company so leads don't show us as their employer
   const employment = ((ed.employment_history as { company?: string; title?: string; current?: boolean; start_date?: string; end_date?: string }[] | undefined) || [])
@@ -252,7 +269,6 @@ export async function sendLeadNotification(
   const orgWebsite = (org.website_url || ed.company_website) as string | undefined
 
   // Company details
-  const industry = (org.industry || ed.company_industry) as string | undefined
   const employees = (org.estimated_num_employees || ed.company_size) as string | number | undefined
   const revenue = (org.annual_revenue_printed || ed.company_revenue) as string | undefined
   const funding = (org.total_funding_printed || ed.company_funding) as string | undefined
@@ -261,7 +277,7 @@ export async function sendLeadNotification(
   const companyState = org.state as string | undefined
   const companyCountry = org.country as string | undefined
   const companyLocation = [companyCity, companyState, companyCountry].filter(Boolean).join(', ')
-  const personLocation = ed.location as string | undefined
+  const personLocation = (ed.location as string | undefined) || pdlLocation
   const seniority = ed.seniority as string | undefined
   const headline = ed.headline as string | undefined
   const keywords = (org.keywords as string[] | undefined)?.slice(0, 8).join(', ')
@@ -269,20 +285,29 @@ export async function sendLeadNotification(
   const photoUrl = apolloRaw.photo_url as string | undefined
   const orgPhone = (org.primary_phone as { number?: string } | undefined)?.number || (org.sanitized_phone as string | undefined)
 
-  // Build HTML sections
-  const allEmails = Array.from(new Set([lead.email, ...lushaEmails].filter(Boolean))) as string[]
-  const effectiveTitle = lead.title || lushaTitle
-  const effectiveCompany = lead.company || lushaCompany
+  // Build HTML sections — title/company fallback chain: caller > ed > lusha > pdl
+  const effectiveTitle = lead.title || (ed.title as string | undefined) || lushaTitle || pdlTitle
+  const effectiveCompany = lead.company || (ed.current_company as string | undefined) || lushaCompany || pdlCompany
+  const effectiveIndustry = (org.industry as string | undefined) || pdlIndustry
+
+  const emailCells = allEmails.map((e) => {
+    const isVerified = verifiedEmailSet.has(e)
+    const label = isVerified
+      ? `<a href="mailto:${e}" style="color:#4f46e5;">${e}</a> <span style="color:#16a34a;font-size:10px;font-weight:700;background:#dcfce7;border-radius:3px;padding:1px 4px;">✓ verified</span>`
+      : `<a href="mailto:${e}" style="color:#4f46e5;">${e}</a>`
+    return label
+  }).join('<br>')
 
   const contactRows = [
     row('Name', name),
-    allEmails.length ? row('Email', allEmails.map((e) => `<a href="mailto:${e}" style="color:#4f46e5;">${e}</a>`).join('<br>')) : '',
+    allEmails.length ? row('Email', emailCells) : '',
     allPhones.length ? row('Phone', allPhones.join('<br>')) : '',
     effectiveCompany ? row('Company', effectiveCompany) : '',
     effectiveTitle ? row('Title', effectiveTitle) : '',
     departments ? row('Department', departments) : '',
     seniority ? row('Seniority', seniority) : '',
     personLocation ? row('Location', String(personLocation)) : '',
+    pdlInferred ? row('Est. Salary', pdlInferred) : '',
     headline ? row('Headline', String(headline)) : '',
     effectiveLinkedin ? row('LinkedIn', 'View Profile →', effectiveLinkedin) : '',
     twitterUrl ? row('Twitter', 'View Profile', twitterUrl) : '',
@@ -290,6 +315,7 @@ export async function sendLeadNotification(
     facebookUrl ? row('Facebook', 'View Profile', facebookUrl) : '',
   ].join('')
 
+  const industry = effectiveIndustry
   const companyRows = [
     industry ? row('Industry', industry) : '',
     employees ? row('Employees', String(employees)) : '',
@@ -372,7 +398,7 @@ export async function sendLeadNotification(
     '',
     '--- CONTACT INFO ---',
     `Name: ${name}`,
-    allEmails.length ? `Email: ${allEmails.join(', ')}` : '',
+    allEmails.length ? `Email: ${allEmails.map((e) => verifiedEmailSet.has(e) ? `${e} (verified)` : e).join(', ')}` : '',
     allPhones.length ? `Phone: ${allPhones.join(', ')}` : '',
     effectiveCompany ? `Company: ${effectiveCompany}` : '',
     effectiveTitle ? `Title: ${effectiveTitle}` : '',
