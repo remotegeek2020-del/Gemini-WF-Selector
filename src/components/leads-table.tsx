@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import type { Lead } from '@/types'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ interface LeadsTableProps {
   onDelete?: (leadId: string) => Promise<void>
   onBulkDelete?: (ids: string[]) => Promise<void>
   showPipeline?: boolean
-  initialExpandedId?: string | null
 }
 
 function formatDate(dateStr: string): string {
@@ -270,7 +269,7 @@ function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, un
   )
 }
 
-function LeadDetailContent({ lead }: { lead: Lead }) {
+export function LeadDetailContent({ lead }: { lead: Lead }) {
   return (
     <div className="grid grid-cols-2 gap-4 items-start">
       {lead.attribution && Object.keys(lead.attribution).length > 0 && (
@@ -315,109 +314,12 @@ function LeadDetailContent({ lead }: { lead: Lead }) {
   )
 }
 
-function LeadModal({ lead, onClose, onEnrich, onDelete, enrichingIds, deletingIds }: {
-  lead: Lead
-  onClose: () => void
-  onEnrich?: (id: string) => Promise<void>
-  onDelete?: (id: string, name: string) => Promise<void>
-  enrichingIds: Set<string>
-  deletingIds: Set<string>
-}) {
-  const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.email || 'Unknown'
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', handler)
-      document.body.style.overflow = ''
-    }
-  }, [onClose])
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8" role="dialog" aria-modal="true">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Panel */}
-      <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col mt-8">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            {lead.is_hot && <span title="AI-flagged high-priority" className="text-lg leading-none">🔥</span>}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-gray-900 truncate">{name !== 'Unknown' ? name : <span className="text-gray-400 italic">Unknown</span>}</h2>
-                <StatusBadge status={lead.status} />
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                {lead.personas && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: lead.personas.color || '#6366f1' }} />
-                    {lead.personas.name}
-                  </span>
-                )}
-                {lead.email && <span className="text-xs text-gray-400">{lead.email}</span>}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 ml-4">
-            {onEnrich && (
-              <Button size="sm" variant="secondary" isLoading={enrichingIds.has(lead.id)} onClick={() => onEnrich(lead.id)}>
-                {lead.status === 'pending' ? 'Enrich' : 'Re-enrich'}
-              </Button>
-            )}
-            {onDelete && (
-              <Button size="sm" variant="danger" isLoading={deletingIds.has(lead.id)} onClick={() => onDelete(lead.id, name)}>
-                Delete
-              </Button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-              aria-label="Close"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto p-6">
-          <LeadDetailContent lead={lead} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline, initialExpandedId }: LeadsTableProps) {
+export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, showPipeline }: LeadsTableProps) {
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [modalLeadId, setModalLeadId] = useState<string | null>(initialExpandedId || null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
-
-  // Open modal when URL param provides a lead ID
-  useEffect(() => {
-    if (initialExpandedId) {
-      setModalLeadId(initialExpandedId)
-    }
-  }, [initialExpandedId])
-
-  const closeModal = useCallback(() => {
-    setModalLeadId(null)
-    // Remove ?lead= from URL without a page reload
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('lead')
-      window.history.replaceState(null, '', url.toString())
-    }
-  }, [])
 
   const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id))
   const someSelected = leads.some((l) => selectedIds.has(l.id))
@@ -453,10 +355,8 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
     if (!onDelete) return
     if (!confirm(`Delete lead "${name}"? This cannot be undone.`)) return
     setDeletingIds((prev) => new Set(prev).add(leadId))
-    try {
-      await onDelete(leadId)
-      if (modalLeadId === leadId) closeModal()
-    } finally {
+    try { await onDelete(leadId) }
+    finally {
       setDeletingIds((prev) => { const n = new Set(prev); n.delete(leadId); return n })
     }
   }
@@ -473,8 +373,6 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
     }
   }
 
-  const modalLead = modalLeadId ? leads.find((l) => l.id === modalLeadId) : null
-
   if (leads.length === 0) {
     return (
       <div className="text-center py-16">
@@ -489,16 +387,6 @@ export default function LeadsTable({ leads, onEnrich, onDelete, onBulkDelete, sh
 
   return (
     <div className="relative">
-      {modalLead && (
-        <LeadModal
-          lead={modalLead}
-          onClose={closeModal}
-          onEnrich={onEnrich ? handleEnrich : undefined}
-          onDelete={onDelete ? handleDelete : undefined}
-          enrichingIds={enrichingIds}
-          deletingIds={deletingIds}
-        />
-      )}
       {/* Bulk action bar */}
       {someSelected && (
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2.5 bg-indigo-600 text-white text-sm rounded-t-lg">

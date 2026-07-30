@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { Lead, Pipeline } from '@/types'
 import LeadsTable from '@/components/leads-table'
+import LeadModal from '@/components/lead-modal'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -18,6 +19,16 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
   const [activePipeline, setActivePipeline] = useState<string>('main')
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [deepLinkedLead, setDeepLinkedLead] = useState<Lead | null>(null)
+
+  // Fetch the specific lead from the email link directly — bypasses pipeline/page filters
+  useEffect(() => {
+    if (!leadFromUrl || !accountId) return
+    fetch(`/api/accounts/${accountId}/leads/${leadFromUrl}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.lead) setDeepLinkedLead(d.lead) })
+      .catch(() => {})
+  }, [leadFromUrl, accountId])
 
   useEffect(() => {
     fetch(`/api/accounts/${accountId}/pipelines`)
@@ -100,8 +111,23 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
     { value: 'no_persona', label: 'No Persona' },
   ]
 
+  const closeDeepLink = useCallback(() => {
+    setDeepLinkedLead(null)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('lead')
+    window.history.replaceState(null, '', url.toString())
+  }, [])
+
   return (
     <div>
+      {deepLinkedLead && (
+        <LeadModal
+          lead={deepLinkedLead}
+          onClose={closeDeepLink}
+          onEnrich={async (id) => { await handleEnrich(id); await fetchLeads() }}
+          onDelete={async (id, name) => { await handleDelete(id); closeDeepLink() }}
+        />
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -160,7 +186,7 @@ export default function AccountDashboardPage({ params }: { params: { accountId: 
               </svg>
             </div>
           ) : (
-            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} onBulkDelete={handleBulkDelete} showPipeline={activePipeline === 'all'} initialExpandedId={leadFromUrl} />
+            <LeadsTable leads={leads} onEnrich={handleEnrich} onDelete={handleDelete} onBulkDelete={handleBulkDelete} showPipeline={activePipeline === 'all'} />
           )}
         </CardContent>
       </Card>
