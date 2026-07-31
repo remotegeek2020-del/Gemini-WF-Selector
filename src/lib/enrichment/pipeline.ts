@@ -125,6 +125,7 @@ export async function runEnrichmentPipeline(
       firstName: lead.firstName || undefined,
       lastName: lead.lastName || undefined,
       email: lead.email || undefined,
+      company: (ed.current_company as string | undefined) || undefined,
     })
     if (lushaResult.person) {
       const lushaFormatted = formatLushaData(lushaResult.person)
@@ -138,17 +139,20 @@ export async function runEnrichmentPipeline(
     sources_skipped.push('lusha')
   }
 
-  // ── Phase 2a: PDL (fallback when Apollo found no title/company, OR no enriched phones) ─
+  // ── Phase 2a: PDL — runs when Apollo is missing profile, phones, or work email ─
   // Note: don't count the form-submitted phone — only enrichment-sourced phones count here
   const apolloFoundProfile = !!(ed.title || ed.current_company)
   const hasEnrichedPhone = getAllPhones(ed, null).length > 0
-  if (keys.pdl && (!apolloFoundProfile || !hasEnrichedPhone)) {
+  const currentEmailForGate = (ed.email as string | undefined) || lead.email || undefined
+  const hasWorkEmail = !!(currentEmailForGate && !isPersonalEmail(currentEmailForGate))
+  if (keys.pdl && (!apolloFoundProfile || !hasEnrichedPhone || !hasWorkEmail)) {
     const pdlResult = await pdlEnrichPerson(keys.pdl, {
       email: lead.email,
       phone: lead.phone,
       firstName: lead.firstName,
       lastName: lead.lastName,
-      linkedinUrl: lead.linkedinUrl,
+      linkedinUrl: linkedinUrl || lead.linkedinUrl,
+      company: (ed.current_company as string | undefined) || undefined,
     })
     if (pdlResult.data) {
       // Preserve Apollo's title/company/linkedin — PDL only fills gaps

@@ -33,15 +33,16 @@ export interface PDLPersonData {
 
 export async function pdlEnrichPerson(
   apiKey: string,
-  params: { email?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; linkedinUrl?: string | null }
+  params: { email?: string | null; phone?: string | null; firstName?: string | null; lastName?: string | null; linkedinUrl?: string | null; company?: string | null }
 ): Promise<{ data: Record<string, unknown> | null; raw: PDLPersonData | null; error?: string }> {
   try {
-    const body: Record<string, unknown> = { required: 'profiles OR emails OR phone_numbers' }
+    const body: Record<string, unknown> = { min_likelihood: 2 }
     if (params.email) body.email = params.email
     if (params.phone) body.phone = params.phone
     if (params.firstName) body.first_name = params.firstName
     if (params.lastName) body.last_name = params.lastName
-    if (params.linkedinUrl) body.linkedin = params.linkedinUrl
+    if (params.linkedinUrl) body.linkedin_url = params.linkedinUrl
+    if (params.company) body.company = params.company
 
     const res = await fetch('https://api.peopledatalabs.com/v5/person/enrich', {
       method: 'POST',
