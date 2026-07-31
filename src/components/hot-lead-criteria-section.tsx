@@ -90,16 +90,23 @@ interface TestResult {
 
 function TestModal({ accountId, criteria, onClose }: { accountId: string; criteria: HotLeadCriteria; onClose: () => void }) {
   const [leads, setLeads] = useState<Lead[]>([])
+  const [leadsLoading, setLeadsLoading] = useState(true)
+  const [leadsError, setLeadsError] = useState<string | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState('')
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<TestResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/accounts/${accountId}/leads?limit=30`)
-      .then((r) => r.json())
+    // pipeline=all so leads from every pipeline are available, not just 'main'
+    fetch(`/api/accounts/${accountId}/leads?limit=50&pipeline=all`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to load leads (${r.status})`)
+        return r.json()
+      })
       .then((d) => setLeads(d.leads || []))
-      .catch(() => {})
+      .catch((e) => setLeadsError(e.message || 'Could not load leads'))
+      .finally(() => setLeadsLoading(false))
   }, [accountId])
 
   const runTest = async () => {
@@ -134,16 +141,21 @@ function TestModal({ accountId, criteria, onClose }: { accountId: string; criter
           <p className="text-sm text-gray-500">Pick an existing lead and run your current (unsaved) criteria against it to preview the AI result.</p>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Select a lead</label>
-            <select value={selectedLeadId} onChange={(e) => { setSelectedLeadId(e.target.value); setResult(null) }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="">— choose a lead —</option>
-              {leads.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {[l.first_name, l.last_name].filter(Boolean).join(' ') || l.email || l.id}
-                  {l.is_hot != null ? (l.is_hot ? ' 🔥' : ' ○') : ''}
-                </option>
-              ))}
-            </select>
+            {leadsError ? (
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{leadsError}</p>
+            ) : (
+              <select value={selectedLeadId} onChange={(e) => { setSelectedLeadId(e.target.value); setResult(null) }}
+                disabled={leadsLoading}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-400">
+                <option value="">{leadsLoading ? 'Loading leads…' : leads.length === 0 ? 'No leads found' : '— choose a lead —'}</option>
+                {leads.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {[l.first_name, l.last_name].filter(Boolean).join(' ') || l.email || l.id}
+                    {l.is_hot != null ? (l.is_hot ? ' 🔥' : ' ○') : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <Button onClick={runTest} disabled={!selectedLeadId || testing} className="w-full">
             {testing ? 'Running AI assessment…' : 'Run Test →'}
@@ -184,6 +196,7 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [showTest, setShowTest] = useState(false)
 
   const set = <K extends keyof HotLeadCriteria>(key: K, value: HotLeadCriteria[K]) =>
@@ -200,14 +213,22 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
   const save = async () => {
     setSaving(true)
     setSaved(false)
+    setSaveError(null)
     try {
-      await fetch(`/api/accounts/${accountId}/settings`, {
+      const res = await fetch(`/api/accounts/${accountId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hot_lead_criteria: criteria }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setSaveError(data.error || `Save failed (${res.status})`)
+        return
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setSaveError('Network error — criteria not saved')
     } finally {
       setSaving(false)
     }
@@ -446,6 +467,9 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
             />
           </CriteriaSection>
 
+          {saveError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{saveError}</p>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" size="sm" onClick={() => setShowTest(true)}>Test with a lead →</Button>
             <Button size="sm" onClick={save} disabled={saving}>

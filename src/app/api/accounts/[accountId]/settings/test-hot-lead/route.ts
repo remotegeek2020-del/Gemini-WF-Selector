@@ -78,7 +78,9 @@ export async function POST(
   }
 
   const persona = lead.personas || null
-  const isDefaultFallback = !lead.assigned_persona_id || !!(persona as Record<string, unknown> | null)?.is_default
+  // Match the exact logic used in enrich/webhook routes:
+  // only flagged as default-fallback when there was NO direct persona match AND the assigned persona is the default
+  const isDefaultFallback = !lead.assigned_persona_id && !!(persona as Record<string, unknown> | null)?.is_default
 
   const result = await assessLeadHotness(aiConfig, {
     enrichedData: (lead.enriched_data || {}) as Record<string, unknown>,
