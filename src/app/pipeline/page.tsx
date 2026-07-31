@@ -751,6 +751,47 @@ const SHARED_CSS = `
     padding: 2px 5px; border-radius: 3px;
   }
 
+  /* ── Bundle Plan Sub-Tabs ── */
+  .pr-plan-tabs {
+    display: flex; gap: 5px; margin-bottom: 20px;
+    overflow-x: auto; padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .pr-plan-tabs::-webkit-scrollbar { display: none; }
+  .pr-plan-tab {
+    flex-shrink: 0; padding: 7px 13px; border-radius: 8px;
+    border: 1.5px solid var(--border-soft); background: var(--surface2);
+    color: var(--text-muted); cursor: pointer; font-size: 11.5px; font-weight: 600;
+    transition: all 0.15s; display: flex; align-items: center; gap: 6px;
+  }
+  .pr-plan-tab:hover { color: var(--text); border-color: var(--border); }
+  .pr-plan-tab.pt-active {
+    background: var(--price-bg); color: var(--price-bright);
+    border-color: var(--price-border);
+  }
+  .pr-plan-tab.pt-flagship {
+    border-color: var(--price-border);
+  }
+  .pr-plan-tab.pt-flagship.pt-active {
+    background: var(--price); color: #fff;
+    border-color: var(--price); box-shadow: 0 2px 10px var(--price-glow);
+  }
+  .pr-plan-tab-flag {
+    font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+    background: rgba(255,255,255,0.22); padding: 1px 5px; border-radius: 3px;
+  }
+  .pr-plan-tab:not(.pt-active) .pr-plan-tab-flag {
+    background: var(--price-bg); color: var(--price-bright);
+    border: 1px solid var(--price-border);
+  }
+  .pr-plan-cost-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--price-bg2); border: 1px solid var(--price-border);
+    border-radius: 8px; padding: 8px 14px; margin-bottom: 20px;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .pr-plan-cost-badge strong { color: var(--price-bright); font-weight: 700; }
+
   /* ── Bundle Charts ── */
   .pr-bcharts { display: flex; flex-direction: column; gap: 14px; }
   .pr-bchart-card {
@@ -1500,6 +1541,119 @@ function WhisTab() {
   )
 }
 
+const BUNDLE_PLAN_TABS = [
+  { key: 'full_waterfall', name: 'Full Waterfall', flagship: true },
+  { key: 'identity_only', name: 'Identity Only', flagship: false },
+  { key: 'contact_builder', name: 'Contact Builder', flagship: false },
+  { key: 'phone_focus', name: 'Phone Hunter', flagship: false },
+  { key: 'email_focus', name: 'Email Finder', flagship: false },
+  { key: 'eu_gdpr', name: 'EU / GDPR', flagship: false },
+]
+
+const BUNDLE_PLANS: Record<string, {
+  costRange: string; avgCost: string; tools: string
+  payg: { price: string; costNote: string; margin: string }
+  monthly: { name: string; amount: string; leads: string; perLead: string; cost: string; margin: string; featured?: boolean }[]
+  annual: { name: string; amount: string; period: string; leads: string; save: string; margin: string }[]
+}> = {
+  full_waterfall: {
+    costRange: '$0.30–1.13', avgCost: '~$0.38', tools: 'All 10 optional tools + Apollo',
+    payg: { price: '$2.50', costNote: '~$0.38 avg cost', margin: '~85%' },
+    monthly: [
+      { name: 'Starter', amount: '$199', leads: '200 leads/mo', perLead: '$1.00/lead', cost: '~$80 cost', margin: '~60% margin', featured: false },
+      { name: 'Growth', amount: '$449', leads: '600 leads/mo', perLead: '$0.75/lead', cost: '~$180 cost', margin: '~60% margin', featured: true },
+      { name: 'Pro', amount: '$799', leads: '1,500 leads/mo', perLead: '$0.53/lead', cost: '~$400 cost', margin: '~50% margin', featured: false },
+      { name: 'Scale', amount: '$1,499', leads: '4,000 leads/mo', perLead: '$0.37/lead', cost: '~$850 cost', margin: '~43% margin', featured: false },
+    ],
+    annual: [
+      { name: 'Starter', amount: '$159', period: '/mo · $1,908/yr', leads: '200/mo', save: 'Save $480/yr', margin: '~65% margin' },
+      { name: 'Growth', amount: '$359', period: '/mo · $4,308/yr', leads: '600/mo', save: 'Save $1,080/yr', margin: '~65% margin' },
+      { name: 'Pro', amount: '$639', period: '/mo · $7,668/yr', leads: '1,500/mo', save: 'Save $1,920/yr', margin: '~55% margin' },
+      { name: 'Scale', amount: '$1,199', period: '/mo · $14,388/yr', leads: '4,000/mo', save: 'Save $3,600/yr', margin: '~47% margin' },
+    ],
+  },
+  identity_only: {
+    costRange: '$0.03–0.05', avgCost: '~$0.04', tools: 'Apollo only',
+    payg: { price: '$0.50', costNote: '~$0.04 avg cost', margin: '~92%' },
+    monthly: [
+      { name: 'Starter', amount: '$49', leads: '300 leads/mo', perLead: '$0.16/lead', cost: '~$12 cost', margin: '~76% margin', featured: false },
+      { name: 'Growth', amount: '$99', leads: '900 leads/mo', perLead: '$0.11/lead', cost: '~$36 cost', margin: '~64% margin', featured: true },
+      { name: 'Pro', amount: '$199', leads: '2,500 leads/mo', perLead: '$0.08/lead', cost: '~$100 cost', margin: '~50% margin', featured: false },
+      { name: 'Scale', amount: '$379', leads: '6,000 leads/mo', perLead: '$0.063/lead', cost: '~$240 cost', margin: '~37% margin', featured: false },
+    ],
+    annual: [
+      { name: 'Starter', amount: '$39', period: '/mo · $468/yr', leads: '300/mo', save: 'Save $120/yr', margin: '~80% margin' },
+      { name: 'Growth', amount: '$79', period: '/mo · $948/yr', leads: '900/mo', save: 'Save $240/yr', margin: '~69% margin' },
+      { name: 'Pro', amount: '$159', period: '/mo · $1,908/yr', leads: '2,500/mo', save: 'Save $480/yr', margin: '~55% margin' },
+      { name: 'Scale', amount: '$299', period: '/mo · $3,588/yr', leads: '6,000/mo', save: 'Save $960/yr', margin: '~42% margin' },
+    ],
+  },
+  contact_builder: {
+    costRange: '$0.20–0.45', avgCost: '~$0.28', tools: 'Apollo + PDL + BetterContact + ContactOut + Hunter',
+    payg: { price: '$2.00', costNote: '~$0.28 avg cost', margin: '~86%' },
+    monthly: [
+      { name: 'Starter', amount: '$169', leads: '200 leads/mo', perLead: '$0.85/lead', cost: '~$56 cost', margin: '~67% margin', featured: false },
+      { name: 'Growth', amount: '$379', leads: '600 leads/mo', perLead: '$0.63/lead', cost: '~$168 cost', margin: '~56% margin', featured: true },
+      { name: 'Pro', amount: '$699', leads: '1,500 leads/mo', perLead: '$0.47/lead', cost: '~$420 cost', margin: '~40% margin', featured: false },
+      { name: 'Scale', amount: '$1,199', leads: '3,000 leads/mo', perLead: '$0.40/lead', cost: '~$840 cost', margin: '~30% margin', featured: false },
+    ],
+    annual: [
+      { name: 'Starter', amount: '$135', period: '/mo · $1,620/yr', leads: '200/mo', save: 'Save $408/yr', margin: '~70% margin' },
+      { name: 'Growth', amount: '$299', period: '/mo · $3,588/yr', leads: '600/mo', save: 'Save $960/yr', margin: '~61% margin' },
+      { name: 'Pro', amount: '$559', period: '/mo · $6,708/yr', leads: '1,500/mo', save: 'Save $1,680/yr', margin: '~45% margin' },
+      { name: 'Scale', amount: '$959', period: '/mo · $11,508/yr', leads: '3,000/mo', save: 'Save $2,880/yr', margin: '~35% margin' },
+    ],
+  },
+  phone_focus: {
+    costRange: '$0.35–0.85', avgCost: '~$0.55', tools: 'Apollo + Lusha + PDL + BetterContact + Kaspr',
+    payg: { price: '$3.50', costNote: '~$0.55 avg cost', margin: '~84%' },
+    monthly: [
+      { name: 'Starter', amount: '$279', leads: '150 leads/mo', perLead: '$1.86/lead', cost: '~$83 cost', margin: '~70% margin', featured: false },
+      { name: 'Growth', amount: '$599', leads: '400 leads/mo', perLead: '$1.50/lead', cost: '~$220 cost', margin: '~63% margin', featured: true },
+      { name: 'Pro', amount: '$1,099', leads: '1,000 leads/mo', perLead: '$1.10/lead', cost: '~$550 cost', margin: '~50% margin', featured: false },
+      { name: 'Scale', amount: '$1,999', leads: '2,500 leads/mo', perLead: '$0.80/lead', cost: '~$1,375 cost', margin: '~31% margin', featured: false },
+    ],
+    annual: [
+      { name: 'Starter', amount: '$223', period: '/mo · $2,676/yr', leads: '150/mo', save: 'Save $672/yr', margin: '~74% margin' },
+      { name: 'Growth', amount: '$479', period: '/mo · $5,748/yr', leads: '400/mo', save: 'Save $1,440/yr', margin: '~67% margin' },
+      { name: 'Pro', amount: '$879', period: '/mo · $10,548/yr', leads: '1,000/mo', save: 'Save $2,640/yr', margin: '~55% margin' },
+      { name: 'Scale', amount: '$1,599', period: '/mo · $19,188/yr', leads: '2,500/mo', save: 'Save $4,800/yr', margin: '~36% margin' },
+    ],
+  },
+  email_focus: {
+    costRange: '$0.15–0.40', avgCost: '~$0.25', tools: 'Apollo + PDL + ContactOut + Hunter + Dropcontact',
+    payg: { price: '$1.50', costNote: '~$0.25 avg cost', margin: '~83%' },
+    monthly: [
+      { name: 'Starter', amount: '$149', leads: '200 leads/mo', perLead: '$0.75/lead', cost: '~$50 cost', margin: '~66% margin', featured: false },
+      { name: 'Growth', amount: '$329', leads: '700 leads/mo', perLead: '$0.47/lead', cost: '~$175 cost', margin: '~47% margin', featured: true },
+      { name: 'Pro', amount: '$599', leads: '1,500 leads/mo', perLead: '$0.40/lead', cost: '~$375 cost', margin: '~37% margin', featured: false },
+      { name: 'Scale', amount: '$999', leads: '3,000 leads/mo', perLead: '$0.33/lead', cost: '~$750 cost', margin: '~25% margin', featured: false },
+    ],
+    annual: [
+      { name: 'Starter', amount: '$119', period: '/mo · $1,428/yr', leads: '200/mo', save: 'Save $360/yr', margin: '~70% margin' },
+      { name: 'Growth', amount: '$263', period: '/mo · $3,156/yr', leads: '700/mo', save: 'Save $792/yr', margin: '~52% margin' },
+      { name: 'Pro', amount: '$479', period: '/mo · $5,748/yr', leads: '1,500/mo', save: 'Save $1,440/yr', margin: '~42% margin' },
+      { name: 'Scale', amount: '$799', period: '/mo · $9,588/yr', leads: '3,000/mo', save: 'Save $2,400/yr', margin: '~30% margin' },
+    ],
+  },
+  eu_gdpr: {
+    costRange: '$0.25–0.60', avgCost: '~$0.38', tools: 'Apollo + PDL + Datagma + Cognism + Dropcontact',
+    payg: { price: '$2.50', costNote: '~$0.38 avg cost', margin: '~85%' },
+    monthly: [
+      { name: 'Starter', amount: '$199', leads: '175 leads/mo', perLead: '$1.14/lead', cost: '~$67 cost', margin: '~66% margin', featured: false },
+      { name: 'Growth', amount: '$449', leads: '500 leads/mo', perLead: '$0.90/lead', cost: '~$190 cost', margin: '~58% margin', featured: true },
+      { name: 'Pro', amount: '$799', leads: '1,200 leads/mo', perLead: '$0.67/lead', cost: '~$456 cost', margin: '~43% margin', featured: false },
+      { name: 'Scale', amount: '$1,499', leads: '3,000 leads/mo', perLead: '$0.50/lead', cost: '~$1,140 cost', margin: '~24% margin', featured: false },
+    ],
+    annual: [
+      { name: 'Starter', amount: '$159', period: '/mo · $1,908/yr', leads: '175/mo', save: 'Save $480/yr', margin: '~70% margin' },
+      { name: 'Growth', amount: '$359', period: '/mo · $4,308/yr', leads: '500/mo', save: 'Save $1,080/yr', margin: '~63% margin' },
+      { name: 'Pro', amount: '$639', period: '/mo · $7,668/yr', leads: '1,200/mo', save: 'Save $1,920/yr', margin: '~48% margin' },
+      { name: 'Scale', amount: '$1,199', period: '/mo · $14,388/yr', leads: '3,000/mo', save: 'Save $3,600/yr', margin: '~30% margin' },
+    ],
+  },
+}
+
 const BUNDLE_SCALE = 1.20
 
 const BUNDLE_CHART_DATA = [
@@ -1679,6 +1833,9 @@ function BundleChart({ b }: {
 }
 
 function PricingTab() {
+  const [activeBundle, setActiveBundle] = useState<string>('full_waterfall')
+  const plans = BUNDLE_PLANS[activeBundle]
+
   return (
     <>
       <header className="pl-header">
@@ -1962,9 +2119,33 @@ function PricingTab() {
         </div>
       </div>
 
-      {/* ── Section 6: Plans to Sell ── */}
+      {/* ── Section 6: Plans to Sell — Bundle Sub-Tabs ── */}
       <div className="pr-section">
         <div className="pr-section-label">Ready-Made Plans — Model B (Bundled, You Pay APIs)</div>
+
+        {/* Bundle selector */}
+        <div className="pr-plan-tabs">
+          {BUNDLE_PLAN_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              className={`pr-plan-tab${tab.flagship ? ' pt-flagship' : ''}${activeBundle === tab.key ? ' pt-active' : ''}`}
+              onClick={() => setActiveBundle(tab.key)}
+            >
+              {tab.name}
+              {tab.flagship && <span className="pr-plan-tab-flag">Flagship</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Cost context for selected bundle */}
+        <div className="pr-plan-cost-badge">
+          <span>Bundle cost range:</span>
+          <strong>{plans.costRange}/lead</strong>
+          <span style={{ color: 'var(--text-dim)' }}>·</span>
+          <span>Typical avg: <strong>{plans.avgCost}</strong></span>
+          <span style={{ color: 'var(--text-dim)' }}>·</span>
+          <span style={{ color: 'var(--text-dim)' }}>{plans.tools}</span>
+        </div>
 
         {/* PAYG */}
         <div style={{ marginBottom: '24px' }}>
@@ -1973,16 +2154,16 @@ function PricingTab() {
             <div className="pr-plan-card payg">
               <div className="pr-plan-name">PAYG</div>
               <div className="pr-plan-price">
-                <div className="pr-plan-amount amber">$2.50</div>
+                <div className="pr-plan-amount amber">{plans.payg.price}</div>
                 <div className="pr-plan-period">per enriched lead</div>
               </div>
               <div className="pr-plan-divider" />
               <div className="pr-plan-leads">No commitment</div>
-              <div className="pr-plan-cost">Your avg cost: ~$0.38</div>
-              <div className="pr-plan-margin">~85% margin</div>
+              <div className="pr-plan-cost">Your avg cost: {plans.payg.costNote}</div>
+              <div className="pr-plan-margin">{plans.payg.margin} margin</div>
               <div className="pr-plan-divider" />
               <div className="pr-plan-features">
-                <div className="pr-plan-feature">Full waterfall</div>
+                <div className="pr-plan-feature">{BUNDLE_PLAN_TABS.find(t => t.key === activeBundle)?.name} bundle</div>
                 <div className="pr-plan-feature">Pay only for leads received</div>
                 <div className="pr-plan-feature">Good for low-volume or testing clients</div>
               </div>
@@ -1994,57 +2175,12 @@ function PricingTab() {
         <div style={{ marginBottom: '16px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Monthly Plans</div>
           <div className="pr-plans-grid">
-            {[
-              {
-                name: 'Starter',
-                amount: '$199',
-                period: '/mo',
-                leads: '200 leads/mo',
-                perLead: '$1.00/lead',
-                cost: '~$80 cost',
-                margin: '~60% margin',
-                features: ['Full waterfall', 'AI persona + scoring', 'GHL integration', 'Email alerts'],
-                featured: false,
-              },
-              {
-                name: 'Growth',
-                amount: '$449',
-                period: '/mo',
-                leads: '600 leads/mo',
-                perLead: '$0.75/lead',
-                cost: '~$180 cost',
-                margin: '~60% margin',
-                features: ['Full waterfall', 'AI persona + scoring', 'GHL integration', 'Priority support'],
-                featured: true,
-              },
-              {
-                name: 'Pro',
-                amount: '$799',
-                period: '/mo',
-                leads: '1,500 leads/mo',
-                perLead: '$0.53/lead',
-                cost: '~$400 cost',
-                margin: '~50% margin',
-                features: ['Full waterfall', 'AI persona + scoring', 'Multi-pipeline', 'Dedicated onboarding'],
-                featured: false,
-              },
-              {
-                name: 'Scale',
-                amount: '$1,499',
-                period: '/mo',
-                leads: '4,000 leads/mo',
-                perLead: '$0.37/lead',
-                cost: '~$850 cost',
-                margin: '~43% margin',
-                features: ['Full waterfall', 'Volume API discounts', 'Custom pipelines', 'SLA support'],
-                featured: false,
-              },
-            ].map((p) => (
-              <div key={p.name} className={`pr-plan-card ${p.featured ? 'featured' : ''}`}>
+            {plans.monthly.map((p) => (
+              <div key={p.name} className={`pr-plan-card${p.featured ? ' featured' : ''}`}>
                 <div className="pr-plan-name">{p.name} {p.featured && <span className="pr-save-badge">Most Popular</span>}</div>
                 <div className="pr-plan-price">
                   <div className="pr-plan-amount">{p.amount}</div>
-                  <div className="pr-plan-period">{p.period}</div>
+                  <div className="pr-plan-period">/mo</div>
                 </div>
                 <div className="pr-plan-divider" />
                 <div className="pr-plan-leads">{p.leads}</div>
@@ -2052,25 +2188,23 @@ function PricingTab() {
                 <div className="pr-plan-margin">{p.margin}</div>
                 <div className="pr-plan-divider" />
                 <div className="pr-plan-features">
-                  {p.features.map((f) => <div key={f} className="pr-plan-feature">{f}</div>)}
+                  <div className="pr-plan-feature">{BUNDLE_PLAN_TABS.find(t => t.key === activeBundle)?.name} bundle</div>
+                  <div className="pr-plan-feature">AI persona + hot scoring</div>
+                  <div className="pr-plan-feature">GHL workflow integration</div>
+                  <div className="pr-plan-feature">Email notifications</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Yearly Plans */}
+        {/* Annual Plans */}
         <div>
           <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Annual Plans <span className="pr-save-badge">Save 20%</span>
           </div>
           <div className="pr-plans-grid">
-            {[
-              { name: 'Starter', amount: '$159', period: '/mo · $1,908/yr', leads: '200 leads/mo', save: 'Save $480/yr', margin: '~65% margin' },
-              { name: 'Growth', amount: '$359', period: '/mo · $4,308/yr', leads: '600 leads/mo', save: 'Save $1,080/yr', margin: '~65% margin' },
-              { name: 'Pro', amount: '$639', period: '/mo · $7,668/yr', leads: '1,500 leads/mo', save: 'Save $1,920/yr', margin: '~55% margin' },
-              { name: 'Scale', amount: '$1,199', period: '/mo · $14,388/yr', leads: '4,000 leads/mo', save: 'Save $3,600/yr', margin: '~47% margin' },
-            ].map((p) => (
+            {plans.annual.map((p) => (
               <div key={p.name} className="pr-plan-card">
                 <div className="pr-plan-name">{p.name}</div>
                 <div className="pr-plan-price">
