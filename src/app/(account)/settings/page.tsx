@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import HotLeadCriteriaSection from '@/components/hot-lead-criteria-section'
 import type { Pipeline } from '@/types'
 
 interface ApiKeyEntry {
@@ -346,6 +347,13 @@ export default function SubAccountSettingsPage() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Hot Lead Criteria */}
+      {accountId && (
+        <div className="mt-8">
+          <HotLeadCriteriaSection accountId={accountId} />
         </div>
       )}
     </div>

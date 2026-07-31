@@ -286,13 +286,20 @@ export function LeadDetailContent({ lead }: { lead: Lead }) {
         </div>
       )}
       {lead.is_hot && lead.hot_reasoning && (
-        <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="col-span-2 bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2">
             <span className="text-base">🔥</span>
             <h4 className="text-xs font-semibold text-orange-700 uppercase tracking-wide">AI: High-Priority Lead</h4>
           </div>
+          {lead.hot_criteria_matched && lead.hot_criteria_matched.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {lead.hot_criteria_matched.map((c, i) => (
+                <span key={i} className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-medium border border-green-200">{c}</span>
+              ))}
+            </div>
+          )}
           <p className="text-sm text-orange-900">{lead.hot_reasoning}</p>
-          <p className="text-xs text-orange-500 italic mt-1">AI assessment only — use as a guide. Your judgment is final.</p>
+          <p className="text-xs text-orange-500 italic">AI assessment only — use as a guide. Your judgment is final.</p>
         </div>
       )}
       {lead.persona_reasoning && (

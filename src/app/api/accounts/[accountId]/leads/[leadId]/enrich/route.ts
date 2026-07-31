@@ -8,7 +8,8 @@ import { runEnrichmentPipeline } from '@/lib/enrichment/pipeline'
 import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLinkedinFromHLPayload, extractAttributionFromHLPayload } from '@/lib/highlevel/client'
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
-import type { AIConfig } from '@/types'
+import { assessLeadHotness } from '@/lib/ai/hot-assessment'
+import type { AIConfig, HotLeadCriteria } from '@/types'
 
 export async function POST(
   _request: NextRequest,
@@ -108,6 +109,14 @@ export async function POST(
       throw new Error('AI model API key not configured. Set it in Agency Settings.')
     }
 
+    // Fetch hot lead criteria for this account
+    const { data: accountData } = await admin
+      .from('accounts')
+      .select('hot_lead_criteria')
+      .eq('id', accountId)
+      .single()
+    const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as HotLeadCriteria | null
+
     const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
 
     // Fetch personas scoped to this lead's pipeline
@@ -181,11 +190,25 @@ export async function POST(
 
     const attribution = extractAttributionFromHLPayload((lead.raw_data || {}) as Record<string, unknown>)
 
+    // Hot lead assessment using account's criteria
+    const matchedPersonaForHot = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
+    const isDefaultFallbackForHot = !assignment.persona_id && !!matchedPersonaForHot?.is_default
+    const hotAssessment = await assessLeadHotness(aiConfig, {
+      enrichedData: enrichedDataRaw,
+      persona: matchedPersonaForHot || null,
+      isDefaultFallback: isDefaultFallbackForHot,
+      source: lead.source,
+      criteria: hotLeadCriteria,
+    })
+
     const leadUpdate: Record<string, unknown> = {
       enriched_data: enrichedDataRaw,
       assigned_persona_id: assignedPersonaId,
       persona_reasoning: reasoning,
       status: finalStatus,
+      is_hot: hotAssessment.is_hot,
+      hot_reasoning: hotAssessment.hot_reasoning,
+      hot_criteria_matched: hotAssessment.criteria_matched,
       updated_at: new Date().toISOString(),
       ...(attribution && !lead.attribution ? { attribution } : {}),
     }
@@ -252,7 +275,7 @@ export async function POST(
     }
 
     // Email notifications
-    const matchedPersonaForEmail = assignedPersonaId ? (personas || []).find((p) => p.id === assignedPersonaId) : null
+    const matchedPersonaForEmail = matchedPersonaForHot
     if (postmarkKey && postmarkFrom && matchedPersonaForEmail) {
       const personaEmails: string[] = (matchedPersonaForEmail.notification_emails || []).filter(Boolean)
       const toEmails = Array.from(new Set([...pipelineEmails, ...personaEmails])).filter(Boolean)
@@ -271,6 +294,8 @@ export async function POST(
             personaColor: matchedPersonaForEmail.color,
             reasoning,
             isDefaultFallback,
+            isHot: hotAssessment.is_hot,
+            hotReasoning: hotAssessment.hot_reasoning,
             pipeline: lead.pipeline || 'main',
             source: lead.source || undefined,
             rawData: lead.raw_data || undefined,

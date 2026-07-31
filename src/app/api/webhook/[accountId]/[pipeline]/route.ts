@@ -10,7 +10,7 @@ import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLink
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import { assessLeadHotness } from '@/lib/ai/hot-assessment'
-import type { AIConfig } from '@/types'
+import type { AIConfig, HotLeadCriteria } from '@/types'
 
 export async function GET() {
   return NextResponse.json({ status: 'ok' }, { status: 200 })
@@ -165,6 +165,10 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     return
   }
 
+  // Fetch hot lead criteria for this account
+  const { data: accountData } = await supabase.from('accounts').select('hot_lead_criteria').eq('id', accountId).single()
+  const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as HotLeadCriteria | null
+
   // Resolve enrichment key: agency-level only
   const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
 
@@ -245,6 +249,7 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     persona: matched || null,
     isDefaultFallback,
     source: lead.source,
+    criteria: hotLeadCriteria,
   })
 
   const leadUpdate: Record<string, unknown> = {
@@ -254,6 +259,7 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     status: finalStatus,
     is_hot: hotAssessment.is_hot,
     hot_reasoning: hotAssessment.hot_reasoning,
+    hot_criteria_matched: hotAssessment.criteria_matched,
     updated_at: new Date().toISOString(),
   }
   if (enrichedFirstName && !lead.first_name) leadUpdate.first_name = enrichedFirstName

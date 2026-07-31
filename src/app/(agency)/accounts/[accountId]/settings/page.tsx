@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import HotLeadCriteriaSection from '@/components/hot-lead-criteria-section'
 
 interface ApiKeyEntry {
   id: string
@@ -1008,6 +1009,11 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             )
           })}
         </div>
+      </div>
+
+      {/* Hot Lead Criteria */}
+      <div className="mt-8">
+        <HotLeadCriteriaSection accountId={accountId} />
       </div>
     </div>
   )

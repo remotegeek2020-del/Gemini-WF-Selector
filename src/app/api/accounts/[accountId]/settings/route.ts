@@ -30,7 +30,7 @@ export async function GET(
       .eq('account_id', params.accountId),
     supabase
       .from('accounts')
-      .select('nurture_enabled, persona_gen_ai_enabled, notification_emails')
+      .select('nurture_enabled, persona_gen_ai_enabled, notification_emails, hot_lead_criteria')
       .eq('id', params.accountId)
       .single(),
   ])
@@ -42,6 +42,7 @@ export async function GET(
     nurtureEnabled: accountResult.data?.nurture_enabled ?? false,
     personaGenAiEnabled: accountResult.data?.persona_gen_ai_enabled ?? false,
     notificationEmails: accountResult.data?.notification_emails ?? [],
+    hotLeadCriteria: accountResult.data?.hot_lead_criteria ?? null,
   })
 }
 
@@ -137,6 +138,7 @@ export async function PATCH(
   if (typeof body.nurture_enabled === 'boolean') updates.nurture_enabled = body.nurture_enabled
   if (typeof body.persona_gen_ai_enabled === 'boolean') updates.persona_gen_ai_enabled = body.persona_gen_ai_enabled
   if (Array.isArray(body.notification_emails)) updates.notification_emails = body.notification_emails
+  if (body.hot_lead_criteria !== undefined) updates.hot_lead_criteria = body.hot_lead_criteria
 
   if (Object.keys(updates).length === 1) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

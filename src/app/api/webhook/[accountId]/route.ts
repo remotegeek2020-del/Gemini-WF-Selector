@@ -173,6 +173,10 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
     return
   }
 
+  // Fetch hot lead criteria for this account
+  const { data: accountData } = await supabase.from('accounts').select('hot_lead_criteria').eq('id', accountId).single()
+  const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as import('@/types').HotLeadCriteria | null
+
   // Resolve enrichment key: agency-level first, no per-account fallback needed for enrichment tools
   const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
 
@@ -248,6 +252,7 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
     persona: matched || null,
     isDefaultFallback,
     source: lead.source,
+    criteria: hotLeadCriteria,
   })
 
   // Build lead update — backfill name/email/phone if the lead arrived with blanks
@@ -258,6 +263,7 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
     status: finalStatus,
     is_hot: hotAssessment.is_hot,
     hot_reasoning: hotAssessment.hot_reasoning,
+    hot_criteria_matched: hotAssessment.criteria_matched,
     updated_at: new Date().toISOString(),
   }
   if (enrichedFirstName && !lead.first_name) leadUpdate.first_name = enrichedFirstName

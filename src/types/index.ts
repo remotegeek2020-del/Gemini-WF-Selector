@@ -1,3 +1,71 @@
+export interface HotLeadCriteria {
+  // Title & Seniority
+  requireDecisionMaker?: boolean
+  requireVpOrAbove?: boolean
+  requireDirectorOrAbove?: boolean
+  requireManagerOrAbove?: boolean
+  titleKeywords?: string
+  titleRoles?: string[]
+  titleRolesOther?: string
+
+  // Company Size
+  minEmployees?: number | null
+  maxEmployees?: number | null
+  minRevenue?: string
+  requireFunding?: boolean
+  maxFoundedYearsAgo?: number | null
+
+  // Industry
+  targetIndustries?: string[]
+  targetIndustriesOther?: string
+  excludeIndustries?: string[]
+  excludeIndustriesOther?: string
+
+  // Contact Data Quality
+  requireVerifiedEmail?: boolean
+  requirePhone?: boolean
+  requireLinkedin?: boolean
+  requireMultipleContactMethods?: boolean
+  maxPdlVerifiedMonths?: number | null
+  minEnrichmentSources?: number | null
+
+  // Location
+  targetStates?: string[]
+  targetCities?: string
+  targetCountries?: string
+  excludeLocations?: string
+
+  // Career Signals
+  recentJobChangeMonths?: number | null
+  minYearsInRole?: number | null
+  minCompaniesWorked?: number | null
+  requireCareerGrowth?: boolean
+  previousNotableCompanies?: string
+  careerSignalsOther?: string
+
+  // Company Signals
+  requireCompanyLinkedin?: boolean
+  requireCompanyPhone?: boolean
+  requireCompanyWebsite?: boolean
+  companyHq?: string
+  companyKeywords?: string
+  companySignalsOther?: string
+
+  // Lead Source
+  requirePaidAd?: boolean
+  requireUtmCampaign?: string
+  requireFormName?: string
+  requireOrganicSearch?: boolean
+  leadSourceOther?: string
+
+  // Scoring
+  minCriteriaMatch?: number | null
+  strictMode?: boolean
+
+  // Custom AI Instructions
+  customInstructions?: string
+}
+
 export interface PersonaLibraryEntry {
   id: string
   name: string
@@ -125,6 +193,7 @@ export interface Lead {
   workflow_triggered: boolean
   is_hot: boolean | null
   hot_reasoning: string | null
+  hot_criteria_matched: string[] | null
   error_message: string | null
   created_at: string
   updated_at: string
