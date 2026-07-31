@@ -159,7 +159,7 @@ Criteria: [JSON array of short strings naming each criterion that was met, e.g. 
 
 function parseHotAssessment(text: string): HotAssessmentResult {
   const hotMatch = text.match(/Hot:\s*(YES|NO)/i)
-  const reasoningMatch = text.match(/Reasoning:\s*(.+?)(?:\nCriteria:|$)/is)
+  const reasoningMatch = text.match(/Reasoning:\s*([\s\S]+?)(?:\nCriteria:|$)/i)
   const criteriaMatch = text.match(/Criteria:\s*(\[[\s\S]*?\])/i)
 
   const is_hot = hotMatch ? hotMatch[1].toUpperCase() === 'YES' : false

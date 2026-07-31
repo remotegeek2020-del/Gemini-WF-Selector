@@ -10,7 +10,7 @@ import { assignWorkflow, updateContactProfile, lookupContactByEmail, extractLink
 import { runPostEnrichmentHLActions } from '@/lib/highlevel/post-enrichment'
 import { sendLeadNotification } from '@/lib/email/postmark'
 import { assessLeadHotness } from '@/lib/ai/hot-assessment'
-import type { AIConfig } from '@/types'
+import type { AIConfig, HotLeadCriteria } from '@/types'
 
 export async function GET() {
   return NextResponse.json({ status: 'ok' }, { status: 200 })
@@ -175,7 +175,7 @@ async function enrichLead(accountId: string, leadId: string, pipelineEmails: str
 
   // Fetch hot lead criteria for this account
   const { data: accountData } = await supabase.from('accounts').select('hot_lead_criteria').eq('id', accountId).single()
-  const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as import('@/types').HotLeadCriteria | null
+  const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as HotLeadCriteria | null
 
   // Resolve enrichment key: agency-level first, no per-account fallback needed for enrichment tools
   const ek = (service: string) => agencyEnrichKeys?.[service] || undefined

@@ -226,7 +226,7 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
               <p className="text-sm text-gray-500 mt-1">AI uses these criteria to flag high-priority leads. Configured per sub-account.</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowTest(true)}>Test →</Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowTest(true)}>Test →</Button>
               <Button size="sm" onClick={save} disabled={saving}>
                 {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Criteria'}
               </Button>
@@ -447,7 +447,7 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
           </CriteriaSection>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setShowTest(true)}>Test with a lead →</Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowTest(true)}>Test with a lead →</Button>
             <Button size="sm" onClick={save} disabled={saving}>
               {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Criteria'}
             </Button>
