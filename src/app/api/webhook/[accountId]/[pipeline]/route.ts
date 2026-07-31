@@ -165,12 +165,16 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     return
   }
 
-  // Fetch hot lead criteria for this account
-  const { data: accountData } = await supabase.from('accounts').select('hot_lead_criteria').eq('id', accountId).single()
+  // Fetch hot lead criteria + tool config for this account
+  const { data: accountData } = await supabase.from('accounts').select('hot_lead_criteria, tool_config').eq('id', accountId).single()
   const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as HotLeadCriteria | null
+  const enabledTools = (accountData?.tool_config as { enabled_tools?: string[] } | null)?.enabled_tools ?? null
 
-  // Resolve enrichment key: agency-level only
-  const ek = (service: string) => agencyEnrichKeys?.[service] || undefined
+  const REQUIRED_ENRICHMENT_TOOLS = ['apollo', 'enrow']
+  const ek = (service: string) => {
+    if (enabledTools !== null && !REQUIRED_ENRICHMENT_TOOLS.includes(service) && !enabledTools.includes(service)) return undefined
+    return agencyEnrichKeys?.[service] || undefined
+  }
 
   const { data: personas } = await supabase
     .from('personas')

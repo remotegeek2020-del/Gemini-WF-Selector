@@ -704,6 +704,40 @@ const SHARED_CSS = `
   }
   .pr-callout strong { color: var(--price-bright); }
 
+  .pr-bundle-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;
+  }
+  .pr-bundle-card {
+    background: var(--surface); border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .pr-bundle-card.featured { border-color: var(--price-border); }
+  .pr-bundle-header { padding: 14px 16px 10px; flex: 1; }
+  .pr-bundle-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pr-bundle-cost { font-size: 12px; font-weight: 800; color: var(--price-bright); font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+  .pr-bundle-desc { font-size: 10.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 10px; }
+  .pr-bundle-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+  .pr-bundle-tool {
+    font-size: 9.5px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+    background: var(--surface2); border: 1px solid var(--border-soft); color: var(--text-muted);
+  }
+  .pr-bundle-tool.req { background: var(--price-bg); color: var(--price-bright); border-color: var(--price-border); }
+  .pr-bundle-footer {
+    padding: 10px 16px; border-top: 1px solid var(--border-soft); background: var(--surface2);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .pr-bundle-cta {
+    font-size: 10px; font-weight: 700; padding: 5px 10px; border-radius: 6px;
+    background: var(--surface); border: 1px solid var(--border-soft);
+    color: var(--text-dim); cursor: default; display: flex; align-items: center; gap: 5px;
+  }
+  .pr-bundle-config-note { font-size: 9.5px; color: var(--text-dim); }
+  .pr-coming-soon-badge {
+    font-size: 8px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+    background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border);
+    padding: 2px 5px; border-radius: 3px;
+  }
+
   @media (max-width: 520px) {
     .pr-scenario-grid { grid-template-columns: 1fr; }
     .pr-model-cards { grid-template-columns: 1fr; }
@@ -1603,7 +1637,94 @@ function PricingTab() {
         </div>
       </div>
 
-      {/* ── Section 4: Reselling Models ── */}
+      {/* ── Section 4: Bundle Presets ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">Enrichment Bundles — Configure Per Sub-Account</div>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.6 }}>
+          Each sub-account can run a different tool combination. Agency admin selects a bundle in Account Settings → Enrichment Tools. The waterfall only activates the tools in that bundle — unused tools never consume credits.
+        </p>
+        <div className="pr-bundle-grid">
+          {([
+            {
+              key: 'identity_only',
+              name: 'Identity Only',
+              cost: '$0.03–0.05',
+              desc: 'Just Apollo + email verification. Basic profile, no phone or work email recovery.',
+              tools: [],
+              featured: false,
+            },
+            {
+              key: 'contact_builder',
+              name: 'Contact Builder',
+              cost: '$0.20–0.45',
+              desc: 'Best all-around for B2B outreach — profile depth, phone recovery, and work email finder.',
+              tools: ['PDL', 'BetterContact', 'ContactOut', 'Hunter'],
+              featured: true,
+              badge: 'Most Popular',
+            },
+            {
+              key: 'phone_focus',
+              name: 'Phone Hunter',
+              cost: '$0.35–0.85',
+              desc: 'Maximum mobile recovery. Stacks Lusha, BetterContact, and Kaspr for the best dial rates.',
+              tools: ['PDL', 'Lusha', 'BetterContact', 'Kaspr'],
+              featured: false,
+            },
+            {
+              key: 'email_focus',
+              name: 'Email Finder',
+              cost: '$0.15–0.40',
+              desc: 'Work email discovery for email-first outreach. Four complementary finders in sequence.',
+              tools: ['PDL', 'ContactOut', 'Hunter', 'Dropcontact'],
+              featured: false,
+            },
+            {
+              key: 'eu_gdpr',
+              name: 'EU / GDPR',
+              cost: '$0.25–0.60',
+              desc: 'GDPR-compliant tools only. Designed for European lead flows.',
+              tools: ['PDL', 'Datagma', 'Cognism', 'Dropcontact'],
+              featured: false,
+            },
+            {
+              key: 'full_waterfall',
+              name: 'Full Waterfall',
+              cost: '$0.30–1.13',
+              desc: 'Every tool enabled. Maximum data. Waterfall still stops early to save credits.',
+              tools: ['PDL', 'Datagma', 'Lusha', 'BetterContact', 'Kaspr', 'Cognism', 'ContactOut', 'Hunter', 'Dropcontact', 'Findymail'],
+              featured: false,
+            },
+          ] as { key: string; name: string; cost: string; desc: string; tools: string[]; featured: boolean; badge?: string }[]).map((b) => (
+            <div key={b.key} className={`pr-bundle-card ${b.featured ? 'featured' : ''}`}>
+              <div className="pr-bundle-header">
+                <div className="pr-bundle-name">
+                  {b.name}
+                  {b.badge && <span style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', background: 'var(--price-bg)', color: 'var(--price-bright)', border: '1px solid var(--price-border)', padding: '2px 5px', borderRadius: '3px' }}>{b.badge}</span>}
+                </div>
+                <div className="pr-bundle-cost">{b.cost}/lead</div>
+                <div className="pr-bundle-desc">{b.desc}</div>
+                <div className="pr-bundle-tools">
+                  <span className="pr-bundle-tool req">Apollo</span>
+                  <span className="pr-bundle-tool req">Enrow</span>
+                  {b.tools.map((t) => <span key={t} className="pr-bundle-tool">{t}</span>)}
+                </div>
+              </div>
+              <div className="pr-bundle-footer">
+                <div className="pr-bundle-config-note">Set in Account Settings</div>
+                <div className="pr-bundle-cta">
+                  Subscribe
+                  <span className="pr-coming-soon-badge">Soon</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="pr-callout" style={{ marginTop: '16px' }}>
+          Bundles are <strong>configured today</strong> in Agency Settings → Enrichment Tools for each sub-account. Per-bundle billing (subscribe clients to a specific bundle tier) is <strong>coming soon</strong> once the payment integration is ready.
+        </div>
+      </div>
+
+      {/* ── Section 5: Reselling Models ── */}
       <div className="pr-section">
         <div className="pr-section-label">Two Ways to Resell to Sub-Accounts</div>
         <div className="pr-model-cards">
@@ -1636,7 +1757,7 @@ function PricingTab() {
         </div>
       </div>
 
-      {/* ── Section 5: Plans to Sell ── */}
+      {/* ── Section 6: Plans to Sell ── */}
       <div className="pr-section">
         <div className="pr-section-label">Ready-Made Plans — Model B (Bundled, You Pay APIs)</div>
 
@@ -1761,7 +1882,7 @@ function PricingTab() {
         </div>
       </div>
 
-      {/* ── Section 6: Whis Add-on ── */}
+      {/* ── Section 7: Whis Add-on ── */}
       <div className="pr-section">
         <div className="pr-section-label">Whis Add-On Pricing (Coming Soon)</div>
         <div className="pr-whis-card">
@@ -1797,7 +1918,7 @@ function PricingTab() {
         </div>
       </div>
 
-      {/* ── Section 7: Example P&L ── */}
+      {/* ── Section 8: Example P&L ── */}
       <div className="pr-section">
         <div className="pr-section-label">Example Monthly P&amp;L — 5 Growth Accounts</div>
         <div style={{ overflowX: 'auto' }}>

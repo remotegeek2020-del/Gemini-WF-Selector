@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import HotLeadCriteriaSection from '@/components/hot-lead-criteria-section'
+import ToolConfigSection from '@/components/tool-config-section'
 
 interface ApiKeyEntry {
   id: string
@@ -301,9 +302,9 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div>
-          <p className="text-sm font-medium text-indigo-800">AI &amp; Enrichment managed at agency level</p>
+          <p className="text-sm font-medium text-indigo-800">Enrichment API keys managed at agency level</p>
           <p className="text-xs text-indigo-600 mt-0.5">
-            AI model, persona assignment, and all enrichment tool keys (Apollo, Lusha, PDL, etc.) are configured in Agency Settings and apply automatically to all sub-accounts.
+            API keys for all enrichment tools are set in Agency Settings. Use the Enrichment Tools section below to choose which tools are active for this account.
           </p>
         </div>
       </div>
@@ -1009,6 +1010,11 @@ export default function AccountSettingsPage({ params }: { params: { accountId: s
             )
           })}
         </div>
+      </div>
+
+      {/* Enrichment Tools */}
+      <div className="mt-8">
+        <ToolConfigSection accountId={accountId} />
       </div>
 
       {/* Hot Lead Criteria */}
