@@ -41,6 +41,18 @@ const SHARED_CSS = `
     --whis-bg2: rgba(168,85,247,0.04);
     --whis-border: rgba(168,85,247,0.25);
     --whis-glow: rgba(168,85,247,0.3);
+    --price: #10b981;
+    --price-bright: #34d399;
+    --price-bg: rgba(16,185,129,0.08);
+    --price-bg2: rgba(16,185,129,0.04);
+    --price-border: rgba(16,185,129,0.25);
+    --price-glow: rgba(16,185,129,0.3);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.08);
+    --amber-border: rgba(245,158,11,0.25);
+    --red: #f87171;
+    --red-bg: rgba(248,113,113,0.08);
+    --red-border: rgba(248,113,113,0.25);
     --radius: 12px;
     --spine-w: 2px;
   }
@@ -72,6 +84,14 @@ const SHARED_CSS = `
       --whis-bg2: rgba(168,85,247,0.03);
       --whis-border: rgba(168,85,247,0.3);
       --whis-glow: rgba(168,85,247,0.15);
+      --price-bg: rgba(16,185,129,0.07);
+      --price-bg2: rgba(16,185,129,0.03);
+      --price-border: rgba(16,185,129,0.3);
+      --price-glow: rgba(16,185,129,0.15);
+      --amber-bg: rgba(245,158,11,0.07);
+      --amber-border: rgba(245,158,11,0.28);
+      --red-bg: rgba(248,113,113,0.07);
+      --red-border: rgba(248,113,113,0.28);
     }
   }
 
@@ -88,6 +108,10 @@ const SHARED_CSS = `
     --ai-bg: rgba(244,114,182,0.08); --ai-border: rgba(244,114,182,0.22);
     --whis-bg: rgba(168,85,247,0.08); --whis-bg2: rgba(168,85,247,0.04);
     --whis-border: rgba(168,85,247,0.25); --whis-glow: rgba(168,85,247,0.3);
+    --price-bg: rgba(16,185,129,0.08); --price-bg2: rgba(16,185,129,0.04);
+    --price-border: rgba(16,185,129,0.25); --price-glow: rgba(16,185,129,0.3);
+    --amber-bg: rgba(245,158,11,0.08); --amber-border: rgba(245,158,11,0.25);
+    --red-bg: rgba(248,113,113,0.08); --red-border: rgba(248,113,113,0.25);
   }
 
   :root[data-theme="light"] {
@@ -103,6 +127,10 @@ const SHARED_CSS = `
     --ai-bg: rgba(244,114,182,0.07); --ai-border: rgba(244,114,182,0.3);
     --whis-bg: rgba(168,85,247,0.06); --whis-bg2: rgba(168,85,247,0.03);
     --whis-border: rgba(168,85,247,0.3); --whis-glow: rgba(168,85,247,0.15);
+    --price-bg: rgba(16,185,129,0.07); --price-bg2: rgba(16,185,129,0.03);
+    --price-border: rgba(16,185,129,0.3); --price-glow: rgba(16,185,129,0.15);
+    --amber-bg: rgba(245,158,11,0.07); --amber-border: rgba(245,158,11,0.28);
+    --red-bg: rgba(248,113,113,0.07); --red-border: rgba(248,113,113,0.28);
   }
 
   html { box-sizing: border-box; }
@@ -137,6 +165,7 @@ const SHARED_CSS = `
   .pl-tab:hover { color: var(--text); background: var(--surface2); }
   .pl-tab.active-waterfall { background: var(--accent); color: #fff; box-shadow: 0 2px 8px var(--accent-glow); }
   .pl-tab.active-whis { background: var(--whis); color: #fff; box-shadow: 0 2px 8px var(--whis-glow); }
+  .pl-tab.active-pricing { background: var(--price); color: #fff; box-shadow: 0 2px 8px var(--price-glow); }
   .pl-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
   .pl-header { margin-bottom: 56px; text-align: center; }
@@ -493,6 +522,193 @@ const SHARED_CSS = `
   .pl-footnote {
     margin-top: 48px; text-align: center; font-size: 11px;
     color: var(--text-dim); line-height: 1.7;
+  }
+
+  /* ── Pricing Tab ── */
+  .pr-eyebrow { color: var(--price-bright); }
+  .pr-eyebrow-dot { background: var(--price-bright); }
+
+  .pr-section { margin-bottom: 48px; }
+  .pr-section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--price-bright);
+    margin-bottom: 16px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--price-border);
+  }
+
+  .pr-tool-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
+  }
+  .pr-tool-card {
+    background: var(--surface2); border: 1px solid var(--border-soft);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .pr-tool-name { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .pr-tool-model { font-size: 10px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .pr-tool-divider { height: 1px; background: var(--border-soft); margin: 8px 0; }
+  .pr-cost-range {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+  }
+  .pr-cost-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); width: 40px; flex-shrink: 0; }
+  .pr-cost-val { font-size: 12px; font-weight: 700; color: var(--price-bright); font-variant-numeric: tabular-nums; }
+  .pr-cost-note { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-top: 5px; }
+  .pr-conditional-badge {
+    display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 4px; margin-bottom: 6px;
+  }
+  .pr-conditional-badge.always { background: rgba(52,211,153,0.1); color: #34d399; border: 1px solid rgba(52,211,153,0.25); }
+  .pr-conditional-badge.cond { background: rgba(251,146,60,0.1); color: #fb923c; border: 1px solid rgba(251,146,60,0.25); }
+  .pr-conditional-badge.rare { background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+
+  .pr-ai-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px;
+  }
+  .pr-ai-card {
+    background: var(--surface2); border: 1px solid var(--border-soft);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .pr-ai-provider { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 3px; }
+  .pr-ai-model { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+  .pr-ai-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10.5px; }
+  .pr-ai-row-label { color: var(--text-muted); }
+  .pr-ai-row-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pr-ai-total {
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-soft);
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px;
+  }
+  .pr-ai-total-label { font-weight: 600; color: var(--text-muted); }
+  .pr-ai-total-val { font-weight: 800; color: var(--price-bright); font-variant-numeric: tabular-nums; }
+
+  .pr-scenario-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .pr-scenario-card {
+    background: var(--surface); border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .pr-scenario-card.best { border-color: rgba(52,211,153,0.35); }
+  .pr-scenario-card.typical { border-color: rgba(251,146,60,0.35); }
+  .pr-scenario-card.heavy { border-color: rgba(248,113,113,0.35); }
+  .pr-scenario-header { display: flex; flex-direction: column; gap: 3px; }
+  .pr-scenario-title { font-size: 12px; font-weight: 700; color: var(--text); }
+  .pr-scenario-sub { font-size: 10px; color: var(--text-muted); }
+  .pr-scenario-rows { display: flex; flex-direction: column; gap: 5px; }
+  .pr-scenario-row { display: flex; justify-content: space-between; font-size: 10.5px; align-items: center; }
+  .pr-scenario-tool { color: var(--text-muted); }
+  .pr-scenario-cost { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+  .pr-scenario-cost.skipped { color: var(--text-dim); font-weight: 400; }
+  .pr-scenario-divider { height: 1px; background: var(--border-soft); }
+  .pr-scenario-total { display: flex; justify-content: space-between; align-items: center; padding-top: 4px; }
+  .pr-scenario-total-label { font-size: 11px; font-weight: 700; color: var(--text); }
+  .pr-scenario-total-cost { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .pr-scenario-total-cost.best { color: #34d399; }
+  .pr-scenario-total-cost.typical { color: #fb923c; }
+  .pr-scenario-total-cost.heavy { color: #f87171; }
+
+  .pr-model-cards {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .pr-model-card {
+    background: var(--surface); border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius); padding: 18px;
+  }
+  .pr-model-card-badge {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 3px 9px; border-radius: 20px; margin-bottom: 10px;
+  }
+  .pr-model-card.model-a .pr-model-card-badge { background: var(--price-bg); color: var(--price-bright); border: 1px solid var(--price-border); }
+  .pr-model-card.model-b .pr-model-card-badge { background: var(--phase5-bg); color: var(--phase5); border: 1px solid var(--phase5-border); }
+  .pr-model-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .pr-model-desc { font-size: 11px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px; }
+  .pr-model-pros { display: flex; flex-direction: column; gap: 5px; }
+  .pr-model-pro { font-size: 10.5px; color: var(--text-muted); line-height: 1.4; }
+  .pr-model-pro::before { content: '✓ '; color: var(--price-bright); font-weight: 700; }
+
+  .pr-plans-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px;
+  }
+  .pr-plan-card {
+    background: var(--surface); border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .pr-plan-card.featured { border-color: var(--price-border); box-shadow: 0 0 20px var(--price-glow); }
+  .pr-plan-card.payg { border-color: var(--amber-border); }
+  .pr-plan-name { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); }
+  .pr-plan-price { display: flex; flex-direction: column; gap: 1px; }
+  .pr-plan-amount { font-size: 26px; font-weight: 800; color: var(--price-bright); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .pr-plan-amount.amber { color: var(--amber); }
+  .pr-plan-period { font-size: 10px; color: var(--text-dim); }
+  .pr-plan-leads { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .pr-plan-cost { font-size: 10px; color: var(--text-dim); }
+  .pr-plan-margin {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 8px;
+    border-radius: 20px; background: var(--price-bg); color: var(--price-bright);
+    border: 1px solid var(--price-border);
+  }
+  .pr-plan-divider { height: 1px; background: var(--border-soft); }
+  .pr-plan-features { display: flex; flex-direction: column; gap: 5px; }
+  .pr-plan-feature { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
+  .pr-plan-feature::before { content: '· '; color: var(--price-bright); }
+  .pr-save-badge {
+    display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 4px;
+    background: rgba(251,146,60,0.12); color: #fb923c; border: 1px solid rgba(251,146,60,0.25);
+  }
+
+  .pr-pl-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    border-radius: 8px; overflow: hidden;
+  }
+  .pr-pl-table th {
+    text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+    background: var(--surface2); border-bottom: 1px solid var(--border-soft);
+  }
+  .pr-pl-table td {
+    padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
+    color: var(--text-muted); vertical-align: top; line-height: 1.4;
+  }
+  .pr-pl-table td:first-child { color: var(--text); font-weight: 600; }
+  .pr-pl-table td:nth-child(3) { font-variant-numeric: tabular-nums; }
+  .pr-pl-table tr:last-child td { border-bottom: none; }
+  .pr-pl-table tr.total-row td {
+    background: var(--price-bg); color: var(--price-bright);
+    font-weight: 800; border-top: 1px solid var(--price-border);
+  }
+  .pr-pl-table tr.revenue-row td { color: #34d399; }
+  .pr-pl-table tr.cost-row td { color: #f87171; }
+
+  .pr-whis-card {
+    background: var(--whis-bg2); border: 1.5px solid var(--whis-border);
+    border-radius: var(--radius); padding: 20px; display: flex; gap: 20px; align-items: flex-start;
+  }
+  .pr-whis-icon {
+    font-size: 28px; flex-shrink: 0; margin-top: 2px;
+  }
+  .pr-whis-title { font-size: 15px; font-weight: 700; color: var(--whis-bright); margin-bottom: 5px; }
+  .pr-whis-desc { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px; }
+  .pr-whis-prices { display: flex; flex-wrap: wrap; gap: 10px; }
+  .pr-whis-price-item {
+    background: var(--whis-bg); border: 1px solid var(--whis-border);
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .pr-whis-price-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--whis-bright); margin-bottom: 4px; }
+  .pr-whis-price-val { font-size: 16px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+  .pr-whis-price-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+  .pr-callout {
+    background: var(--price-bg2); border: 1px solid var(--price-border);
+    border-radius: 8px; padding: 14px 16px; font-size: 11px; color: var(--text-muted);
+    line-height: 1.6; margin-top: 12px;
+  }
+  .pr-callout strong { color: var(--price-bright); }
+
+  @media (max-width: 520px) {
+    .pr-scenario-grid { grid-template-columns: 1fr; }
+    .pr-model-cards { grid-template-columns: 1fr; }
+    .pr-plans-grid { grid-template-columns: 1fr 1fr; }
+    .pr-tool-grid { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 520px) {
@@ -1152,8 +1368,506 @@ function WhisTab() {
   )
 }
 
+function PricingTab() {
+  return (
+    <>
+      <header className="pl-header">
+        <div className="pl-eyebrow pr-eyebrow">
+          <span className="pl-eyebrow-dot pr-eyebrow-dot" />
+          Reselling Guide
+        </div>
+        <h1 className="pl-h1">Cost Breakdown &amp; Pricing</h1>
+        <p className="pl-subtitle">
+          Real costs for every enrichment tool and AI call — plus ready-made plans to mark up and sell to your sub-accounts.
+        </p>
+      </header>
+
+      {/* ── Section 1: Tool Costs ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">What Each Tool Costs You</div>
+        <div className="pr-tool-grid">
+          {[
+            {
+              name: 'Apollo.io',
+              model: 'Credits / Plan',
+              trigger: 'always',
+              lo: '$0.015', hi: '$0.049',
+              note: 'Cheapest on Organization plan (~$149/mo unlimited). Higher per-credit on small plans. Seeds every downstream tool — always worth running.',
+            },
+            {
+              name: 'Lusha',
+              model: 'Credits',
+              trigger: 'cond',
+              lo: '$0.25', hi: '$0.80',
+              note: 'Most expensive per call, but returns the best direct mobile dials. Only runs when a LinkedIn URL is found in Phase 1.',
+            },
+            {
+              name: 'People Data Labs',
+              model: 'PAYG',
+              trigger: 'cond',
+              lo: '$0.03', hi: '$0.05',
+              note: 'PAYG at $0.05/record, drops to ~$0.03 at 10k+/mo. Strongest for SMBs and 1099 workers Apollo misses.',
+            },
+            {
+              name: 'Datagma',
+              model: 'Credits',
+              trigger: 'cond',
+              lo: '$0.10', hi: '$0.25',
+              note: 'LinkedIn-native. Requires LinkedIn URL — only activates when Phase 1 found one. Returns mobile phones often missed by other tools.',
+            },
+            {
+              name: 'BetterContact',
+              model: 'Credits',
+              trigger: 'cond',
+              lo: '$0.15', hi: '$0.30',
+              note: 'Phase 3 first choice. Aggregates 15+ phone sources in one call — highest coverage. Only runs when no phone found in Phases 1–2.',
+            },
+            {
+              name: 'Kaspr',
+              model: 'Credits',
+              trigger: 'cond',
+              lo: '$0.10', hi: '$0.25',
+              note: 'Phase 3 second choice. LinkedIn-sourced mobiles, strong EU + North America. Skipped if BetterContact already found a phone.',
+            },
+            {
+              name: 'Cognism',
+              model: 'Credits / Enterprise',
+              trigger: 'rare',
+              lo: '$0.10', hi: '$0.35',
+              note: 'Phase 3 last resort. Best UK and EMEA coverage. GDPR-compliant — useful if your clients have European leads.',
+            },
+            {
+              name: 'ContactOut',
+              model: 'Credits',
+              trigger: 'cond',
+              lo: '$0.05', hi: '$0.20',
+              note: 'Phase 4 first pick for email recovery. Requires LinkedIn URL. Returns work + personal email with confidence scores.',
+            },
+            {
+              name: 'Hunter.io',
+              model: 'Plan-based',
+              trigger: 'cond',
+              lo: '$0.007', hi: '$0.068',
+              note: 'Pattern-matches company email formats. Very cheap at volume (Growth plan: $104/mo = 5k searches = $0.021 each). Needs company domain.',
+            },
+            {
+              name: 'Dropcontact',
+              model: 'Credits',
+              trigger: 'cond',
+              lo: '$0.05', hi: '$0.10',
+              note: 'Phase 4 third option. GDPR-native (French), generates + verifies work email from name + company. Good EU fallback.',
+            },
+            {
+              name: 'Findymail',
+              model: 'Credits',
+              trigger: 'rare',
+              lo: '$0.05', hi: '$0.10',
+              note: 'Phase 4 last resort. SMTP-verifies before returning — extremely high deliverability. Only fires if ContactOut, Hunter, Dropcontact all failed.',
+            },
+            {
+              name: 'Enrow',
+              model: 'PAYG',
+              trigger: 'always',
+              lo: '$0.001', hi: '$0.003',
+              note: 'Verifies every email from every phase. Negligible cost per email. Always runs — this is what makes the verified_emails list trustworthy.',
+            },
+          ].map((t) => (
+            <div key={t.name} className="pr-tool-card">
+              <div className="pr-conditional-badge" style={
+                t.trigger === 'always' ? { background: 'rgba(52,211,153,0.1)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' } :
+                t.trigger === 'cond' ? { background: 'rgba(251,146,60,0.1)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.25)' } :
+                { background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)' }
+              }>
+                {t.trigger === 'always' ? 'Always Runs' : t.trigger === 'cond' ? 'Conditional' : 'Last Resort'}
+              </div>
+              <div className="pr-tool-name">{t.name}</div>
+              <div className="pr-tool-model">{t.model}</div>
+              <div className="pr-tool-divider" />
+              <div className="pr-cost-range">
+                <span className="pr-cost-label">Range</span>
+                <span className="pr-cost-val">{t.lo} – {t.hi}</span>
+              </div>
+              <div className="pr-cost-note">{t.note}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Section 2: AI Costs ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">AI Model Cost Per Lead (2 calls: persona + hot scoring)</div>
+        <div className="pr-ai-grid">
+          {[
+            { provider: 'Google', model: 'Gemini 2.5 Flash', input: '$0.075/1M', output: '$0.30/1M', total: '~$0.0002', note: 'Recommended — fastest, cheapest, excellent quality' },
+            { provider: 'Google', model: 'Gemini 2.5 Pro', input: '$1.25/1M', output: '$10/1M', total: '~$0.004', note: 'Better reasoning, 20× more expensive — use for complex personas' },
+            { provider: 'OpenAI', model: 'GPT-4o Mini', input: '$0.15/1M', output: '$0.60/1M', total: '~$0.0004', note: 'Near-Gemini Flash pricing, familiar OpenAI quality' },
+            { provider: 'OpenAI', model: 'GPT-4o', input: '$2.50/1M', output: '$10/1M', total: '~$0.007', note: 'High quality but 35× pricier than Gemini Flash per lead' },
+            { provider: 'Anthropic', model: 'Claude Haiku 4.5', input: '$0.80/1M', output: '$4/1M', total: '~$0.0024', note: 'Excellent reasoning per dollar, strong at structured output' },
+            { provider: 'Anthropic', model: 'Claude Sonnet', input: '$3/1M', output: '$15/1M', total: '~$0.009', note: 'Best-in-class reasoning — premium price for premium quality' },
+          ].map((m) => (
+            <div key={m.model} className="pr-ai-card">
+              <div className="pr-ai-provider">{m.provider}</div>
+              <div className="pr-ai-model">{m.model}</div>
+              <div className="pr-ai-row">
+                <span className="pr-ai-row-label">Input</span>
+                <span className="pr-ai-row-val" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{m.input}</span>
+              </div>
+              <div className="pr-ai-row">
+                <span className="pr-ai-row-label">Output</span>
+                <span className="pr-ai-row-val" style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{m.output}</span>
+              </div>
+              <div className="pr-ai-total">
+                <span className="pr-ai-total-label">Per Lead</span>
+                <span className="pr-ai-total-val">{m.total}</span>
+              </div>
+              <div className="pr-cost-note" style={{ marginTop: '8px' }}>{m.note}</div>
+            </div>
+          ))}
+        </div>
+        <div className="pr-callout">
+          Each lead runs <strong>2 AI calls</strong> — one for persona matching (~1,500 input + 200 output tokens) and one for hot lead scoring (~1,200 input + 300 output tokens). With Gemini 2.5 Flash the total AI cost is less than <strong>$0.22 per 1,000 leads</strong>.
+        </div>
+      </div>
+
+      {/* ── Section 3: Per-Lead Scenarios ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">Real Cost Per Lead — Three Scenarios</div>
+        <div className="pr-scenario-grid">
+          {/* Best case */}
+          <div className="pr-scenario-card best">
+            <div className="pr-scenario-header">
+              <div className="pr-scenario-title">Scenario A — Minimal</div>
+              <div className="pr-scenario-sub">Apollo finds everything. Pipeline stops after Phase 1.</div>
+            </div>
+            <div className="pr-scenario-rows">
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Apollo.io</span><span className="pr-scenario-cost">$0.030</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Lusha</span><span className="pr-scenario-cost skipped">— skipped</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">PDL</span><span className="pr-scenario-cost skipped">— skipped</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Phone recovery</span><span className="pr-scenario-cost skipped">— skipped</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Email recovery</span><span className="pr-scenario-cost skipped">— skipped</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Enrow (1 email)</span><span className="pr-scenario-cost">$0.002</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">AI (Gemini Flash)</span><span className="pr-scenario-cost">$0.0002</span></div>
+            </div>
+            <div className="pr-scenario-divider" />
+            <div className="pr-scenario-total">
+              <span className="pr-scenario-total-label">Total</span>
+              <span className="pr-scenario-total-cost best">~$0.03</span>
+            </div>
+          </div>
+
+          {/* Typical */}
+          <div className="pr-scenario-card typical">
+            <div className="pr-scenario-header">
+              <div className="pr-scenario-title">Scenario B — Typical</div>
+              <div className="pr-scenario-sub">Apollo + PDL fills gaps + BetterContact for phone.</div>
+            </div>
+            <div className="pr-scenario-rows">
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Apollo.io</span><span className="pr-scenario-cost">$0.030</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">PDL (no title found)</span><span className="pr-scenario-cost">$0.040</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">BetterContact</span><span className="pr-scenario-cost">$0.220</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">ContactOut (email)</span><span className="pr-scenario-cost">$0.080</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Enrow (3 emails)</span><span className="pr-scenario-cost">$0.006</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">AI (Gemini Flash)</span><span className="pr-scenario-cost">$0.0002</span></div>
+            </div>
+            <div className="pr-scenario-divider" />
+            <div className="pr-scenario-total">
+              <span className="pr-scenario-total-label">Total</span>
+              <span className="pr-scenario-total-cost typical">~$0.38</span>
+            </div>
+          </div>
+
+          {/* Heavy */}
+          <div className="pr-scenario-card heavy">
+            <div className="pr-scenario-header">
+              <div className="pr-scenario-title">Scenario C — Full Waterfall</div>
+              <div className="pr-scenario-sub">All phases run. Gmail alias, no easy match.</div>
+            </div>
+            <div className="pr-scenario-rows">
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Apollo.io</span><span className="pr-scenario-cost">$0.040</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Lusha</span><span className="pr-scenario-cost">$0.400</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">PDL + Datagma</span><span className="pr-scenario-cost">$0.190</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">BetterContact + Kaspr</span><span className="pr-scenario-cost">$0.350</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">ContactOut + Hunter</span><span className="pr-scenario-cost">$0.140</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">Enrow (5 emails)</span><span className="pr-scenario-cost">$0.010</span></div>
+              <div className="pr-scenario-row"><span className="pr-scenario-tool">AI (Gemini Flash)</span><span className="pr-scenario-cost">$0.0002</span></div>
+            </div>
+            <div className="pr-scenario-divider" />
+            <div className="pr-scenario-total">
+              <span className="pr-scenario-total-label">Total</span>
+              <span className="pr-scenario-total-cost heavy">~$1.13</span>
+            </div>
+          </div>
+        </div>
+        <div className="pr-callout">
+          Across a real account, most leads fall in <strong>Scenario A or B</strong> — average cost lands around <strong>$0.30–$0.45 per lead</strong> when weighted realistically. Waterfall stops early whenever it finds what it needs, so credits aren&apos;t wasted on phases that aren&apos;t needed.
+        </div>
+      </div>
+
+      {/* ── Section 4: Reselling Models ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">Two Ways to Resell to Sub-Accounts</div>
+        <div className="pr-model-cards">
+          <div className="pr-model-card model-a">
+            <div className="pr-model-card-badge">Model A — Platform Fee</div>
+            <div className="pr-model-title">Sub-accounts use their own API keys</div>
+            <div className="pr-model-desc">
+              Each sub-account enters their own enrichment API keys in Settings. They pay the vendors directly. You charge a flat monthly fee for LeadRouter access, personas, workflows, and the waterfall logic. Your margin is nearly 100% since you have almost no per-lead cost.
+            </div>
+            <div className="pr-model-pros">
+              <div className="pr-model-pro">Zero enrichment cost risk for you — you never pay the APIs</div>
+              <div className="pr-model-pro">Sub-account controls exactly which tools they enable</div>
+              <div className="pr-model-pro">Predictable recurring revenue with near-zero COGS</div>
+              <div className="pr-model-pro">Already how the app is architected — nothing to build</div>
+            </div>
+          </div>
+          <div className="pr-model-card model-b">
+            <div className="pr-model-card-badge">Model B — Bundled Enrichment</div>
+            <div className="pr-model-title">Agency holds the keys, charges per-lead markup</div>
+            <div className="pr-model-desc">
+              You negotiate volume pricing with enrichment vendors using your aggregate lead volume, then charge sub-accounts a per-lead or plan-based fee. Your profit comes from the spread between your wholesale rate and their retail rate. More complex to manage but higher total revenue.
+            </div>
+            <div className="pr-model-pros">
+              <div className="pr-model-pro">Volume discounts improve your margins at scale</div>
+              <div className="pr-model-pro">Sub-accounts get instant access without managing 12 API accounts</div>
+              <div className="pr-model-pro">You control quality — one set of keys, one waterfall config</div>
+              <div className="pr-model-pro">Monthly recurring plan income is more predictable than PAYG</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section 5: Plans to Sell ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">Ready-Made Plans — Model B (Bundled, You Pay APIs)</div>
+
+        {/* PAYG */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Pay-As-You-Go</div>
+          <div className="pr-plans-grid">
+            <div className="pr-plan-card payg">
+              <div className="pr-plan-name">PAYG</div>
+              <div className="pr-plan-price">
+                <div className="pr-plan-amount amber">$2.50</div>
+                <div className="pr-plan-period">per enriched lead</div>
+              </div>
+              <div className="pr-plan-divider" />
+              <div className="pr-plan-leads">No commitment</div>
+              <div className="pr-plan-cost">Your avg cost: ~$0.38</div>
+              <div className="pr-plan-margin">~85% margin</div>
+              <div className="pr-plan-divider" />
+              <div className="pr-plan-features">
+                <div className="pr-plan-feature">Full waterfall</div>
+                <div className="pr-plan-feature">Pay only for leads received</div>
+                <div className="pr-plan-feature">Good for low-volume or testing clients</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly Plans */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Monthly Plans</div>
+          <div className="pr-plans-grid">
+            {[
+              {
+                name: 'Starter',
+                amount: '$199',
+                period: '/mo',
+                leads: '200 leads/mo',
+                perLead: '$1.00/lead',
+                cost: '~$80 cost',
+                margin: '~60% margin',
+                features: ['Full waterfall', 'AI persona + scoring', 'GHL integration', 'Email alerts'],
+                featured: false,
+              },
+              {
+                name: 'Growth',
+                amount: '$449',
+                period: '/mo',
+                leads: '600 leads/mo',
+                perLead: '$0.75/lead',
+                cost: '~$180 cost',
+                margin: '~60% margin',
+                features: ['Full waterfall', 'AI persona + scoring', 'GHL integration', 'Priority support'],
+                featured: true,
+              },
+              {
+                name: 'Pro',
+                amount: '$799',
+                period: '/mo',
+                leads: '1,500 leads/mo',
+                perLead: '$0.53/lead',
+                cost: '~$400 cost',
+                margin: '~50% margin',
+                features: ['Full waterfall', 'AI persona + scoring', 'Multi-pipeline', 'Dedicated onboarding'],
+                featured: false,
+              },
+              {
+                name: 'Scale',
+                amount: '$1,499',
+                period: '/mo',
+                leads: '4,000 leads/mo',
+                perLead: '$0.37/lead',
+                cost: '~$850 cost',
+                margin: '~43% margin',
+                features: ['Full waterfall', 'Volume API discounts', 'Custom pipelines', 'SLA support'],
+                featured: false,
+              },
+            ].map((p) => (
+              <div key={p.name} className={`pr-plan-card ${p.featured ? 'featured' : ''}`}>
+                <div className="pr-plan-name">{p.name} {p.featured && <span className="pr-save-badge">Most Popular</span>}</div>
+                <div className="pr-plan-price">
+                  <div className="pr-plan-amount">{p.amount}</div>
+                  <div className="pr-plan-period">{p.period}</div>
+                </div>
+                <div className="pr-plan-divider" />
+                <div className="pr-plan-leads">{p.leads}</div>
+                <div className="pr-plan-cost">{p.perLead} · {p.cost}</div>
+                <div className="pr-plan-margin">{p.margin}</div>
+                <div className="pr-plan-divider" />
+                <div className="pr-plan-features">
+                  {p.features.map((f) => <div key={f} className="pr-plan-feature">{f}</div>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Yearly Plans */}
+        <div>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Annual Plans <span className="pr-save-badge">Save 20%</span>
+          </div>
+          <div className="pr-plans-grid">
+            {[
+              { name: 'Starter', amount: '$159', period: '/mo · $1,908/yr', leads: '200 leads/mo', save: 'Save $480/yr', margin: '~65% margin' },
+              { name: 'Growth', amount: '$359', period: '/mo · $4,308/yr', leads: '600 leads/mo', save: 'Save $1,080/yr', margin: '~65% margin' },
+              { name: 'Pro', amount: '$639', period: '/mo · $7,668/yr', leads: '1,500 leads/mo', save: 'Save $1,920/yr', margin: '~55% margin' },
+              { name: 'Scale', amount: '$1,199', period: '/mo · $14,388/yr', leads: '4,000 leads/mo', save: 'Save $3,600/yr', margin: '~47% margin' },
+            ].map((p) => (
+              <div key={p.name} className="pr-plan-card">
+                <div className="pr-plan-name">{p.name}</div>
+                <div className="pr-plan-price">
+                  <div className="pr-plan-amount">{p.amount}</div>
+                  <div className="pr-plan-period">{p.period}</div>
+                </div>
+                <div className="pr-plan-divider" />
+                <div className="pr-plan-leads">{p.leads}</div>
+                <div className="pr-plan-margin">{p.margin}</div>
+                <div style={{ fontSize: '10px', color: 'var(--amber)', fontWeight: 700, marginTop: '4px' }}>{p.save}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section 6: Whis Add-on ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">Whis Add-On Pricing (Coming Soon)</div>
+        <div className="pr-whis-card">
+          <div className="pr-whis-icon">◈</div>
+          <div style={{ flex: 1 }}>
+            <div className="pr-whis-title">Whis — Identity Resolution Agent</div>
+            <div className="pr-whis-desc">
+              Whis only activates when the waterfall fails to produce a confident identity. It runs additional reverse lookups, web searches, and AI reconciliation to resolve alias emails and partial identities. Because it has real per-run API cost, it should be a premium add-on — not included in the base plans above.
+            </div>
+            <div className="pr-whis-prices">
+              <div className="pr-whis-price-item">
+                <div className="pr-whis-price-label">Your Cost / Run</div>
+                <div className="pr-whis-price-val">$0.50–$2.00</div>
+                <div className="pr-whis-price-sub">Depending on steps needed</div>
+              </div>
+              <div className="pr-whis-price-item">
+                <div className="pr-whis-price-label">Charge Sub-Account</div>
+                <div className="pr-whis-price-val">$10–$15</div>
+                <div className="pr-whis-price-sub">Per identity resolved</div>
+              </div>
+              <div className="pr-whis-price-item">
+                <div className="pr-whis-price-label">Your Margin</div>
+                <div className="pr-whis-price-val">87–97%</div>
+                <div className="pr-whis-price-sub">Highest margin product</div>
+              </div>
+              <div className="pr-whis-price-item">
+                <div className="pr-whis-price-label">Whis Bundle</div>
+                <div className="pr-whis-price-val">+$99/mo</div>
+                <div className="pr-whis-price-sub">Up to 20 identities/mo</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section 7: Example P&L ── */}
+      <div className="pr-section">
+        <div className="pr-section-label">Example Monthly P&amp;L — 5 Growth Accounts</div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="pr-pl-table">
+            <thead>
+              <tr>
+                <th>Line Item</th>
+                <th>Detail</th>
+                <th>Monthly</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="revenue-row">
+                <td>Plan Revenue</td>
+                <td>5 × Growth plan @ $449/mo</td>
+                <td>+$2,245</td>
+              </tr>
+              <tr className="revenue-row">
+                <td>Whis Add-on</td>
+                <td>2 accounts × $99/mo Whis bundle</td>
+                <td>+$198</td>
+              </tr>
+              <tr>
+                <td style={{ color: 'var(--text-muted)' }}>Total Revenue</td>
+                <td></td>
+                <td style={{ fontWeight: 700, color: 'var(--text)' }}>$2,443</td>
+              </tr>
+              <tr className="cost-row">
+                <td>Enrichment APIs</td>
+                <td>5 × 600 leads = 3,000 leads × $0.30 avg</td>
+                <td>−$900</td>
+              </tr>
+              <tr className="cost-row">
+                <td>Whis API cost</td>
+                <td>2 × 20 runs × $1.25 avg</td>
+                <td>−$50</td>
+              </tr>
+              <tr className="cost-row">
+                <td>AI (Gemini Flash)</td>
+                <td>3,000 leads × $0.0002 × 2 calls</td>
+                <td>−$1.20</td>
+              </tr>
+              <tr className="cost-row">
+                <td>Server / hosting</td>
+                <td>Vercel + Supabase Pro est.</td>
+                <td>−$75</td>
+              </tr>
+              <tr className="total-row">
+                <td>Gross Profit</td>
+                <td>54% gross margin</td>
+                <td>$1,417</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="pr-callout" style={{ marginTop: '16px' }}>
+          As you add more sub-accounts your API volume grows, unlocking better wholesale rates — pushing your cost per lead down while your revenue per lead stays fixed. At 10+ Growth accounts the average cost drops below <strong>$0.22/lead</strong>, widening your margin to <strong>~65%+</strong> without changing your prices.
+        </div>
+      </div>
+
+      <div className="pl-footnote">
+        All tool costs are estimates based on publicly available pricing as of mid-2025 — actual rates vary by plan, volume, and negotiated contracts.<br />
+        AI costs are calculated at ~1,500 input tokens + 250 output tokens per call. Costs drop significantly at volume. Lock in annual API contracts early.
+      </div>
+    </>
+  )
+}
+
 export default function PipelinePage() {
-  const [activeTab, setActiveTab] = useState<'waterfall' | 'whis'>('waterfall')
+  const [activeTab, setActiveTab] = useState<'waterfall' | 'whis' | 'pricing'>('waterfall')
 
   return (
     <>
@@ -1178,9 +1892,17 @@ export default function PipelinePage() {
               <span className="pl-tab-dot" style={{ background: activeTab === 'whis' ? '#fff' : '#a855f7' }} />
               Whis · Identity Agent
             </button>
+            <button
+              type="button"
+              className={`pl-tab ${activeTab === 'pricing' ? 'active-pricing' : ''}`}
+              onClick={() => setActiveTab('pricing')}
+            >
+              <span className="pl-tab-dot" style={{ background: activeTab === 'pricing' ? '#fff' : '#10b981' }} />
+              Pricing &amp; Reselling
+            </button>
           </nav>
 
-          {activeTab === 'waterfall' ? <WaterfallTab /> : <WhisTab />}
+          {activeTab === 'waterfall' ? <WaterfallTab /> : activeTab === 'whis' ? <WhisTab /> : <PricingTab />}
         </div>
       </body>
     </>
