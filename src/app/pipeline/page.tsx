@@ -361,6 +361,19 @@ const SHARED_CSS = `
     text-transform: uppercase; padding: 2px 6px; border-radius: 4px;
     margin-bottom: 5px;
   }
+  .pl-tool-status {
+    display: inline-block; font-size: 8.5px; font-weight: 800;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px; margin-bottom: 5px;
+  }
+  .pl-tool-status.live {
+    background: rgba(52,211,153,0.1); color: #34d399;
+    border: 1px solid rgba(52,211,153,0.28);
+  }
+  .pl-tool-status.soon {
+    background: rgba(245,158,11,0.08); color: #f59e0b;
+    border: 1px solid rgba(245,158,11,0.28);
+  }
 
   .pl-waterfall-note {
     display: flex; align-items: center; gap: 5px;
@@ -820,15 +833,21 @@ const SHARED_CSS = `
   }
 `
 
-function Tool({ name, strength, needs, outputs, offset }: {
+function Tool({ name, strength, needs, outputs, offset, status }: {
   name: string
   strength: string
   needs: string
   outputs: string[]
   offset?: string
+  status?: 'live' | 'soon'
 }) {
   return (
     <div className="pl-tool">
+      {status && (
+        <div className={`pl-tool-status ${status}`}>
+          {status === 'live' ? '● Live' : '○ Coming Soon'}
+        </div>
+      )}
       <div className="pl-tool-name">{name}</div>
       <div className="pl-tool-strength">{strength}</div>
       <div className="pl-tool-divider" />
@@ -857,7 +876,7 @@ function WaterfallTab() {
         </div>
         <h1 className="pl-h1">Lead Enrichment Waterfall</h1>
         <p className="pl-subtitle">
-          A sequential, credit-efficient pipeline that enriches each inbound lead through up to 12 data sources. Each tool receives signals discovered by the tools above it — and only activates when its API key is configured.
+          A sequential, credit-efficient pipeline that enriches each inbound lead through up to 12 data sources. Each tool receives signals discovered by the tools above it — and only activates when its API key is configured. Currently live: Apollo, Lusha, PDL.
         </p>
         <div className="pl-legend">
           {[
@@ -867,9 +886,11 @@ function WaterfallTab() {
             { color: '#34d399', label: 'Phase 4 — Email Recovery' },
             { color: '#a78bfa', label: 'Phase 5 — Verification' },
             { color: '#f472b6', label: 'AI Analysis' },
+            { color: '#34d399', label: '● Live', border: '1px solid rgba(52,211,153,0.4)' },
+            { color: '#f59e0b', label: '○ Coming Soon', border: '1px solid rgba(245,158,11,0.35)' },
           ].map((item) => (
             <div key={item.label} className="pl-legend-item">
-              <span className="pl-legend-dot" style={{ background: item.color }} />
+              <span className="pl-legend-dot" style={{ background: item.color, border: (item as { border?: string }).border }} />
               {item.label}
             </div>
           ))}
@@ -911,12 +932,14 @@ function WaterfallTab() {
             <div className="pl-tools">
               <Tool
                 name="Apollo.io"
+                status="live"
                 strength="275M+ B2B profiles · best first-pass for professional identity"
                 needs="Email address, or first + last name (any single signal works)"
                 outputs={['Job title', 'Company name', 'Industry', 'Seniority level', 'Departments', 'LinkedIn URL ★', 'Work phone(s)', 'Work email', 'Employment history', 'Company size', 'Revenue', 'Funding', 'HQ location', 'Social profiles', 'Company keywords', 'Headshot URL']}
               />
               <Tool
                 name="Lusha"
+                status="live"
                 strength="Best-in-class for direct dials and personal mobile numbers"
                 needs="LinkedIn URL (preferred) or email address"
                 offset="LinkedIn URL from Apollo"
@@ -944,6 +967,7 @@ function WaterfallTab() {
             <div className="pl-tools">
               <Tool
                 name="People Data Labs"
+                status="live"
                 strength="1.5B+ profiles · strongest coverage for SMBs, independents, and gig workers"
                 needs="Email, phone, name, or LinkedIn URL — any single signal"
                 offset="Any signals from Apollo"
@@ -951,6 +975,7 @@ function WaterfallTab() {
               />
               <Tool
                 name="Datagma"
+                status="soon"
                 strength="LinkedIn-native — extracts mobile phones directly from LinkedIn profiles"
                 needs="LinkedIn URL (required)"
                 offset="LinkedIn URL from Apollo or PDL"
@@ -974,6 +999,7 @@ function WaterfallTab() {
             <div className="pl-tools">
               <Tool
                 name="BetterContact"
+                status="soon"
                 strength="Aggregates 15+ phone data sources in a single call — highest overall coverage"
                 needs="Email + name, or name + company, or LinkedIn URL"
                 offset="Name, email, company from Phases 1–2; LinkedIn URL if found"
@@ -981,6 +1007,7 @@ function WaterfallTab() {
               />
               <Tool
                 name="Kaspr"
+                status="soon"
                 strength="Specialized in LinkedIn-sourced mobiles — strong European + North American coverage"
                 needs="LinkedIn URL (required)"
                 offset="LinkedIn URL from Apollo / PDL / Datagma"
@@ -988,6 +1015,7 @@ function WaterfallTab() {
               />
               <Tool
                 name="Cognism"
+                status="soon"
                 strength="GDPR-compliant B2B data · strongest UK and EMEA phone coverage"
                 needs="Email, or name + company name"
                 offset="Name, email, company from Phases 1–2"
@@ -1015,6 +1043,7 @@ function WaterfallTab() {
             <div className="pl-tools">
               <Tool
                 name="ContactOut"
+                status="soon"
                 strength="Aggregates emails from multiple sources — good mix of work and personal coverage"
                 needs="LinkedIn URL (required)"
                 offset="LinkedIn URL from Apollo / PDL / Datagma"
@@ -1022,6 +1051,7 @@ function WaterfallTab() {
               />
               <Tool
                 name="Hunter.io"
+                status="soon"
                 strength="Pattern-matches company email formats — very reliable for corporate domains"
                 needs="Company domain (derived from email domain or company website)"
                 offset="Company website / domain from Apollo org data"
@@ -1029,6 +1059,7 @@ function WaterfallTab() {
               />
               <Tool
                 name="Dropcontact"
+                status="soon"
                 strength="GDPR-native (built in France) — generates and verifies work emails from name + company"
                 needs="First name + last name + company name"
                 offset="Full name and company from Phases 1–2"
@@ -1036,6 +1067,7 @@ function WaterfallTab() {
               />
               <Tool
                 name="Findymail"
+                status="soon"
                 strength="High deliverability focus — finds emails that pass SMTP verification before returning"
                 needs="LinkedIn URL, or name + company domain"
                 offset="LinkedIn URL or name + company from Phases 1–2"
@@ -1056,13 +1088,14 @@ function WaterfallTab() {
           <div className="pl-phase-header">
             <span className="pl-phase-badge">Phase 5</span>
             <span className="pl-phase-title">Email Verification</span>
-            <span className="pl-phase-meta">Always runs · ~$0.001 per email</span>
+            <span className="pl-phase-meta">Optional — runs when API key is configured · ~$0.001 per email</span>
           </div>
           <div className="pl-phase-body">
-            <div className="pl-skip">Runs on every email address collected across all phases — the original opt-in email, Lusha direct emails, PDL email variants, ContactOut results, and recovered work emails. Catches catch-all servers that accept anything without actually delivering.</div>
+            <div className="pl-skip">When enabled, runs SMTP verification on every email address collected across all phases — the original opt-in email, Lusha direct emails, PDL email variants, ContactOut results, and any recovered work emails. Catches catch-all servers that accept anything without actually delivering. Skipped entirely if no Enrow API key is configured.</div>
             <div className="pl-tools">
               <Tool
                 name="Enrow"
+                status="soon"
                 strength="Real-time SMTP verification — distinguishes real inboxes from catch-all domains"
                 needs="Any email addresses collected from Phases 1–4"
                 offset="All emails from Apollo, Lusha, PDL, ContactOut, Hunter, Dropcontact, Findymail"
