@@ -30,7 +30,7 @@ export async function GET(
       .eq('account_id', params.accountId),
     supabase
       .from('accounts')
-      .select('nurture_enabled, persona_gen_ai_enabled, notification_emails, hot_lead_criteria, tool_config')
+      .select('nurture_enabled, persona_gen_ai_enabled, notification_emails, hot_lead_criteria, tool_config, is_complimentary')
       .eq('id', params.accountId)
       .single(),
   ])
@@ -44,6 +44,7 @@ export async function GET(
     notificationEmails: accountResult.data?.notification_emails ?? [],
     hotLeadCriteria: accountResult.data?.hot_lead_criteria ?? null,
     toolConfig: accountResult.data?.tool_config ?? null,
+    isComplimentary: accountResult.data?.is_complimentary ?? false,
   })
 }
 
@@ -141,6 +142,12 @@ export async function PATCH(
   if (Array.isArray(body.notification_emails)) updates.notification_emails = body.notification_emails
   if (body.hot_lead_criteria !== undefined) updates.hot_lead_criteria = body.hot_lead_criteria
   if (body.tool_config !== undefined) updates.tool_config = body.tool_config
+  if (typeof body.is_complimentary === 'boolean') {
+    if (roleData.role !== 'agency_admin') {
+      return NextResponse.json({ error: 'Only agency admins can change account type' }, { status: 403 })
+    }
+    updates.is_complimentary = body.is_complimentary
+  }
 
   if (Object.keys(updates).length === 1) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })

@@ -102,6 +102,8 @@ export interface Account {
   slug: string
   nurture_enabled: boolean
   notification_emails: string[]
+  is_complimentary: boolean
+  tool_config: { bundle_preset?: string; enabled_tools?: string[] } | null
   created_at: string
   updated_at: string
 }

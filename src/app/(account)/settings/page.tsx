@@ -68,6 +68,8 @@ export default function SubAccountSettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [nurtureEnabled, setNurtureEnabled] = useState(false)
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [isComplimentary, setIsComplimentary] = useState(false)
+  const [activePreset, setActivePreset] = useState<string | null>(null)
   const [formValues, setFormValues] = useState<
     Record<string, { key_value: string; extra_data: Record<string, string> }>
   >({})
@@ -98,6 +100,8 @@ export default function SubAccountSettingsPage() {
         const keys: ApiKeyEntry[] = data.apiKeys || []
         setExistingKeys(keys)
         setNurtureEnabled(data.nurtureEnabled ?? false)
+        setIsComplimentary(data.isComplimentary ?? false)
+        setActivePreset((data.toolConfig as { bundle_preset?: string } | null)?.bundle_preset ?? null)
 
         fetch(`/api/accounts/${accountId}/pipelines`)
           .then((r) => r.json())
@@ -213,6 +217,89 @@ export default function SubAccountSettingsPage() {
               </p>
             </div>
           </div>
+
+          {/* Account Type */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Account Type</CardTitle>
+                {isComplimentary ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                    Complimentary
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                    Paying
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isComplimentary ? (
+                <p className="text-sm text-gray-600">
+                  Your agency covers all enrichment costs for this account. All tools and AI models run at no charge to you.
+                </p>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  This is a paying account. Enrichment tools are enabled based on your active bundle. Contact your agency to upgrade or change your bundle.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Enrichment Bundles — Coming Soon */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Enrichment Bundle</CardTitle>
+                  <p className="text-xs text-gray-500 mt-0.5">Select a preset that matches your lead volume and budget</p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 uppercase tracking-wide border border-gray-200">
+                  Coming Soon
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-4">
+                Bundle subscriptions are coming soon. Your agency currently manages tool access directly. The presets below show what each bundle includes.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { key: 'identity_only', name: 'Identity Only', desc: 'Apollo lookup + email verification. Minimum viable enrichment.', cost: '$0.04/lead', color: 'bg-gray-50 border-gray-200' },
+                  { key: 'contact_builder', name: 'Contact Builder', desc: 'Identity + PDL profile depth + Enrow email. Best for outbound.', cost: '$0.08/lead', color: 'bg-blue-50 border-blue-200' },
+                  { key: 'phone_focus', name: 'Phone Focus', desc: 'Identity + Lusha + PhantomBuster phone waterfall.', cost: '$0.12/lead', color: 'bg-violet-50 border-violet-200' },
+                  { key: 'email_focus', name: 'Email Focus', desc: 'Identity + Hunter + Clearbit email + MillionVerifier.', cost: '$0.10/lead', color: 'bg-sky-50 border-sky-200' },
+                  { key: 'eu_gdpr', name: 'EU / GDPR', desc: 'Skymem + Proxycurl only — GDPR-safe data sources.', cost: '$0.09/lead', color: 'bg-emerald-50 border-emerald-200' },
+                  { key: 'full_waterfall', name: 'Full Waterfall', desc: 'All 12 tools in sequence. Maximum data coverage.', cost: '$0.18/lead', color: 'bg-indigo-50 border-indigo-200' },
+                ].map((bundle) => (
+                  <div
+                    key={bundle.key}
+                    className={`relative p-3 rounded-lg border-2 ${bundle.color} ${
+                      activePreset === bundle.key ? 'ring-2 ring-indigo-400 ring-offset-1' : 'opacity-60'
+                    }`}
+                  >
+                    {activePreset === bundle.key && (
+                      <span className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-600 text-white uppercase tracking-wide">
+                        Active
+                      </span>
+                    )}
+                    <p className="text-sm font-semibold text-gray-800">{bundle.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{bundle.desc}</p>
+                    <p className="text-xs font-medium text-gray-700 mt-2">{bundle.cost}</p>
+                    <button
+                      disabled
+                      className="mt-2 w-full text-xs font-medium py-1.5 rounded border border-gray-300 bg-white text-gray-400 cursor-not-allowed"
+                    >
+                      Subscribe — Coming Soon
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Nurture pipeline info */}
           {nurtureEnabled && accountId && (
