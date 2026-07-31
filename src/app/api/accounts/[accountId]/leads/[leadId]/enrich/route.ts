@@ -275,6 +275,18 @@ export async function POST(
           reasoning,
           isDefaultFallback,
           fieldIds,
+          enrichedData: enrichedDataRaw,
+          leadData: {
+            firstName: enrichedFirstName || lead.first_name || undefined,
+            lastName: enrichedLastName || lead.last_name || undefined,
+            email: enrichedEmail || lead.email || undefined,
+            phone: enrichedPhone || lead.phone || undefined,
+            company: enrichedCompany,
+            title: enrichedTitle,
+            source: lead.source || undefined,
+            isHot: hotAssessment.is_hot,
+            hotReasoning: hotAssessment.hot_reasoning || undefined,
+          },
         })
       }
     }

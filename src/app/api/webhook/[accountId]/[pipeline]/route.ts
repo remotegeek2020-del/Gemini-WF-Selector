@@ -316,13 +316,17 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
     if (contactId) {
       await runPostEnrichmentHLActions({
         apiKey: highlevelKey, locationId, contactId, persona: matched, reasoning, isDefaultFallback, fieldIds,
+        enrichedData: enrichedDataRaw,
         leadData: {
           firstName: enrichedFirstName || lead.first_name || undefined,
           lastName: enrichedLastName || lead.last_name || undefined,
           email: enrichedEmail || lead.email || undefined,
+          phone: enrichedPhone || lead.phone || undefined,
           company: enrichedCompany,
           title: enrichedTitle,
           source: lead.source || undefined,
+          isHot: hotAssessment.is_hot,
+          hotReasoning: hotAssessment.hot_reasoning || undefined,
         },
       })
     }

@@ -20,13 +20,17 @@ interface PostEnrichmentOptions {
   reasoning: string
   isDefaultFallback: boolean
   fieldIds?: FieldIds | null
+  enrichedData?: Record<string, unknown>
   leadData?: {
     firstName?: string
     lastName?: string
     email?: string
+    phone?: string
     company?: string
     title?: string
     source?: string
+    isHot?: boolean
+    hotReasoning?: string
   }
 }
 
@@ -59,18 +63,49 @@ function resolveOpportunityName(template: string | null | undefined, opts: {
 }
 
 export async function runPostEnrichmentHLActions(opts: PostEnrichmentOptions) {
-  const { apiKey, locationId, contactId, persona, reasoning, isDefaultFallback, fieldIds, leadData } = opts
+  const { apiKey, locationId, contactId, persona, reasoning, isDefaultFallback, fieldIds, enrichedData, leadData } = opts
 
   const score = isDefaultFallback ? 'Low — Default Fallback' : 'High — Direct Match'
+  const ed = enrichedData || {}
+
+  // Collect enriched contact details for the note
+  const allPhones = (ed.all_phones as string[] | undefined) || []
+  const allEmails = (ed.all_emails as string[] | undefined) || []
+  const verifiedEmails = new Set((ed.verified_emails as string[] | undefined) || [])
+  const enrichedTitle = (ed.title as string | undefined) || (ed.lusha_current_title as string | undefined) || (ed.pdl_title as string | undefined)
+  const enrichedCompany = (ed.current_company as string | undefined) || (ed.lusha_current_company as string | undefined) || (ed.pdl_company as string | undefined)
+  const linkedinUrl = (ed.linkedin_url as string | undefined)
+  const location = (ed.location as string | undefined) || (ed.pdl_location as string | undefined)
+  const seniority = ed.seniority as string | undefined
+  const industry = (ed.pdl_industry as string | undefined) || ((ed.apollo_raw as Record<string, unknown> | undefined)?.organization as Record<string, unknown> | undefined)?.industry as string | undefined
+  const companySize = ed.pdl_company_size as string | undefined
+  const sourcesUsed = (ed.sources_used as string[] | undefined) || []
+
+  const contactLines: string[] = []
+  if (leadData?.firstName || leadData?.lastName) contactLines.push(`Name: ${[leadData.firstName, leadData.lastName].filter(Boolean).join(' ')}`)
+  if (allEmails.length) contactLines.push(`Email: ${allEmails.map(e => verifiedEmails.has(e) ? `${e} ✓` : e).join(', ')}`)
+  if (allPhones.length) contactLines.push(`Phone: ${allPhones.join(', ')}`)
+  if (enrichedCompany) contactLines.push(`Company: ${enrichedCompany}`)
+  if (enrichedTitle) contactLines.push(`Title: ${enrichedTitle}`)
+  if (seniority) contactLines.push(`Seniority: ${seniority}`)
+  if (industry) contactLines.push(`Industry: ${industry}`)
+  if (companySize) contactLines.push(`Company Size: ${companySize}`)
+  if (location) contactLines.push(`Location: ${location}`)
+  if (linkedinUrl) contactLines.push(`LinkedIn: ${linkedinUrl}`)
 
   const noteBody = [
-    '📋 Lead Router — Persona Assignment',
+    leadData?.isHot ? '🔥 HIGH-PRIORITY LEAD (AI assessment — use as guide)' : '',
+    leadData?.isHot && leadData.hotReasoning ? `Hot Reason: ${leadData.hotReasoning}` : '',
+    leadData?.isHot ? '' : '',
+    '📋 Lead Router — Enrichment Summary',
     `Persona: ${persona.name}${isDefaultFallback ? ' (default fallback)' : ''}`,
     `Score: ${score}`,
     '',
-    'Reasoning:',
+    ...(contactLines.length ? ['--- Contact Info ---', ...contactLines, ''] : []),
+    ...(sourcesUsed.length ? [`Data Sources: ${sourcesUsed.join(', ')}`, ''] : []),
+    '--- AI Reasoning ---',
     reasoning,
-  ].join('\n')
+  ].filter(l => l !== null && l !== undefined).join('\n').replace(/\n{3,}/g, '\n\n').trim()
 
   await Promise.allSettled([
     // 1. Tag contact with persona name

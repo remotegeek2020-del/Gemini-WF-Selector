@@ -238,6 +238,7 @@ async function enrichNurtureLead(accountId: string, leadId: string) {
         reasoning,
         isDefaultFallback,
         fieldIds,
+        enrichedData: enrichedDataRaw,
       })
     }
   }
