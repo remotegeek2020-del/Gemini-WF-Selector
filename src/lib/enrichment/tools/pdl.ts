@@ -92,10 +92,10 @@ export async function pdlEnrichPerson(
       pdl_raw: person,
     }
 
-    // Fill standard fields only if not already set by Apollo
-    if (person.job_title) data.title = data.title || person.job_title
-    if (person.job_company_name) data.current_company = data.current_company || person.job_company_name
-    if (person.linkedin_url) data.linkedin_url = data.linkedin_url || person.linkedin_url
+    // Set fallback fields — pipeline guards Apollo values after merge
+    if (person.job_title) data.title = person.job_title
+    if (person.job_company_name) data.current_company = person.job_company_name
+    if (person.linkedin_url) data.linkedin_url = person.linkedin_url
 
     return { data, raw: person }
   } catch (err) {

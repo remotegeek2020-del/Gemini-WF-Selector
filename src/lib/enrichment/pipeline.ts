@@ -151,7 +151,14 @@ export async function runEnrichmentPipeline(
       linkedinUrl: lead.linkedinUrl,
     })
     if (pdlResult.data) {
+      // Preserve Apollo's title/company/linkedin — PDL only fills gaps
+      const preMergeTitle = ed.title
+      const preMergeCompany = ed.current_company
+      const preMergeLinkedin = ed.linkedin_url
       ed = { ...ed, ...pdlResult.data }
+      if (preMergeTitle) ed.title = preMergeTitle
+      if (preMergeCompany) ed.current_company = preMergeCompany
+      if (preMergeLinkedin) ed.linkedin_url = preMergeLinkedin
       // Resolve LinkedIn from PDL if not yet found
       if (!linkedinUrl && pdlResult.data.pdl_linkedin) {
         linkedinUrl = pdlResult.data.pdl_linkedin as string

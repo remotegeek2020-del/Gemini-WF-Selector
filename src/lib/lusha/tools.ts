@@ -69,7 +69,7 @@ export function formatLushaData(person: LushaPersonData | null): Record<string, 
 
   const directEmails = (person.emails || []).map((e) => e.email).filter(Boolean)
   const phones = (person.phoneNumbers || []).map(
-    (p) => `${p.countryCode || ''}${p.localNumber}`.trim()
+    (p) => `${p.countryCode ? '+' + p.countryCode : ''}${p.localNumber}`.trim()
   ).filter(Boolean)
 
   return {
