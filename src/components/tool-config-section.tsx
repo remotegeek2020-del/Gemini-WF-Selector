@@ -11,8 +11,8 @@ interface ToolDef {
   description: string
   pack: 'profile' | 'phone' | 'email'
   phase: string
-  hitRate: number   // fraction of leads this tool actually runs on (waterfall effect)
-  avgCostWhenRun: number  // cost per call when the tool does run
+  hitRate: number
+  avgCostWhenRun: number
 }
 
 const TOOL_DEFS: Record<string, ToolDef> = {
@@ -68,8 +68,7 @@ const TOOL_DEFS: Record<string, ToolDef> = {
   },
 }
 
-// Cost of required tools (always on)
-const BASE_COST = 0.035 + 0.006  // apollo + enrow (avg)
+const BASE_COST = 0.035 + 0.006  // apollo + enrow
 
 // ── Bundle presets ────────────────────────────────────────────────────────────
 
@@ -78,7 +77,7 @@ export type BundlePreset = 'identity_only' | 'contact_builder' | 'phone_focus' |
 interface Bundle {
   name: string
   description: string
-  tools: string[]
+  tools: string[]  // full intended tool list regardless of availability
   badge?: string
   costLow: number
   costHigh: number
@@ -136,7 +135,7 @@ const PACK_COLORS: Record<string, { bg: string; text: string; border: string }> 
   email: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
 }
 
-// ── Cost estimator ────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function estimateCost(enabledTools: string[]): { low: number; avg: number; high: number } {
   let avg = BASE_COST
@@ -147,52 +146,72 @@ function estimateCost(enabledTools: string[]): { low: number; avg: number; high:
   return { low: avg * 0.6, avg, high: avg * 2.2 }
 }
 
-function detectPreset(enabledTools: string[]): BundlePreset {
-  const sorted = [...enabledTools].sort().join(',')
-  for (const [key, bundle] of Object.entries(BUNDLES)) {
-    if ([...bundle.tools].sort().join(',') === sorted) return key as BundlePreset
-  }
-  return 'custom'
+/** Returns tools from a preset that are currently available for activation */
+function availableToolsForPreset(preset: Exclude<BundlePreset, 'custom'>, available: Set<string>): string[] {
+  return BUNDLES[preset].tools.filter((t) => available.has(t))
+}
+
+interface ToolConfig {
+  bundle_preset?: BundlePreset
+  enabled_tools?: string[]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-interface ToolConfig {
-  bundle_preset: BundlePreset
-  enabled_tools: string[]
-}
-
 export default function ToolConfigSection({ accountId }: { accountId: string }) {
+  // selectedPreset is the INTENT (what bundle this account is on), stored in DB.
+  // enabledTools is the RUNTIME SET (only tools with configured API keys that are active).
+  const [selectedPreset, setSelectedPreset] = useState<BundlePreset>('identity_only')
   const [enabledTools, setEnabledTools] = useState<string[]>([])
+  // Derived from agency enrichment_keys — a tool is available when its API key exists
+  const [availableOptionalTools, setAvailableOptionalTools] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/accounts/${accountId}/settings`)
-      .then((r) => r.json())
-      .then((data) => {
-        const tc = data.toolConfig as ToolConfig | null
-        setEnabledTools(tc?.enabled_tools ?? Object.keys(TOOL_DEFS))  // default: all tools enabled
+    const REQUIRED = new Set(REQUIRED_TOOLS as unknown as string[])
+    Promise.all([
+      fetch(`/api/accounts/${accountId}/settings`).then((r) => r.json()),
+      fetch('/api/agency/settings').then((r) => r.json()),
+    ])
+      .then(([accountData, agencyData]) => {
+        // Determine which tools have API keys configured at agency level
+        const enrichKeys = (agencyData.settings?.enrichment_keys ?? {}) as Record<string, string>
+        const available = new Set(
+          Object.entries(enrichKeys)
+            .filter(([slug, val]) => !REQUIRED.has(slug) && val && val.trim())
+            .map(([slug]) => slug)
+        )
+        setAvailableOptionalTools(available)
+
+        const tc = accountData.toolConfig as ToolConfig | null
+        // Filter stored enabled_tools down to only currently-available tools
+        const storedTools = (tc?.enabled_tools ?? []).filter((t) => available.has(t))
+        setEnabledTools(storedTools)
+        setSelectedPreset(tc?.bundle_preset ?? 'identity_only')
       })
-      .catch(() => setEnabledTools(Object.keys(TOOL_DEFS)))
+      .catch(() => { setEnabledTools([]); setSelectedPreset('identity_only') })
       .finally(() => setLoading(false))
   }, [accountId])
 
-  const activePreset = detectPreset(enabledTools)
   const cost = estimateCost(enabledTools)
 
   const applyPreset = useCallback((preset: Exclude<BundlePreset, 'custom'>) => {
-    setEnabledTools(BUNDLES[preset].tools)
+    setSelectedPreset(preset)
+    // Only enable tools that have a configured API key; unavailable ones are "pending"
+    setEnabledTools(availableToolsForPreset(preset, availableOptionalTools))
     setSaved(false)
     setSaveError(null)
-  }, [])
+  }, [availableOptionalTools])
 
   const toggleTool = useCallback((slug: string) => {
+    if (!availableOptionalTools.has(slug)) return  // guard: can't toggle coming-soon tools
     setEnabledTools((prev) =>
       prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug]
     )
+    setSelectedPreset('custom')  // manually adjusted → custom
     setSaved(false)
     setSaveError(null)
   }, [])
@@ -206,7 +225,7 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tool_config: {
-            bundle_preset: detectPreset(enabledTools),
+            bundle_preset: selectedPreset,
             enabled_tools: enabledTools,
           },
         }),
@@ -223,7 +242,7 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
     } finally {
       setSaving(false)
     }
-  }, [accountId, enabledTools])
+  }, [accountId, selectedPreset, enabledTools])
 
   const packGroups: Record<string, string[]> = { profile: [], phone: [], email: [] }
   for (const [slug, def] of Object.entries(TOOL_DEFS)) {
@@ -281,7 +300,10 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick Presets</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {(Object.entries(BUNDLES) as [Exclude<BundlePreset, 'custom'>, Bundle][]).map(([key, bundle]) => {
-              const isActive = activePreset === key
+              const isActive = selectedPreset === key
+              const liveCount = bundle.tools.filter((t) => availableOptionalTools.has(t)).length
+              const totalCount = bundle.tools.length
+              const pendingCount = totalCount - liveCount
               return (
                 <button
                   key={key}
@@ -294,7 +316,7 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="text-xs font-700 font-semibold text-gray-900 leading-snug">{bundle.name}</span>
+                    <span className="text-xs font-semibold text-gray-900 leading-snug">{bundle.name}</span>
                     {bundle.badge && (
                       <span className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
                         {bundle.badge}
@@ -304,12 +326,27 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
                   <div className="text-[11px] text-emerald-700 font-semibold mb-1">
                     ${bundle.costLow.toFixed(2)}–${bundle.costHigh.toFixed(2)}/lead
                   </div>
-                  <div className="text-[10.5px] text-gray-500 leading-snug">{bundle.description}</div>
+                  <div className="text-[10.5px] text-gray-500 leading-snug mb-2">{bundle.description}</div>
+                  {/* Tool availability indicator */}
+                  {totalCount === 0 ? (
+                    <div className="text-[10px] text-gray-400 font-medium">Required tools only</div>
+                  ) : (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[10px] font-semibold text-emerald-600">
+                        {liveCount}/{totalCount} live
+                      </span>
+                      {pendingCount > 0 && (
+                        <span className="text-[10px] text-amber-600 font-medium">
+                          · {pendingCount} coming soon
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </button>
               )
             })}
           </div>
-          {activePreset === 'custom' && (
+          {selectedPreset === 'custom' && (
             <div className="mt-2 flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -317,6 +354,23 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
               Custom configuration — does not match any preset
             </div>
           )}
+          {selectedPreset !== 'custom' && (() => {
+            const pending = BUNDLES[selectedPreset as Exclude<BundlePreset, 'custom'>].tools
+              .filter((t) => !availableOptionalTools.has(t))
+            if (pending.length === 0) return null
+            return (
+              <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>
+                  <strong>{BUNDLES[selectedPreset as Exclude<BundlePreset, 'custom'>].name}</strong> preset saved.{' '}
+                  {pending.map((t) => TOOL_DEFS[t]?.name ?? t).join(', ')}{' '}
+                  {pending.length === 1 ? 'will activate' : 'will activate'} automatically once the integration is ready.
+                </span>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Individual tool toggles */}
@@ -355,7 +409,8 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
           {(['profile', 'phone', 'email'] as const).map((pack) => {
             const colors = PACK_COLORS[pack]
             const slugs = packGroups[pack]
-            const allOn = slugs.every((s) => enabledTools.includes(s))
+            const availableSlugs = slugs.filter((s) => availableOptionalTools.has(s))
+            const allAvailableOn = availableSlugs.length > 0 && availableSlugs.every((s) => enabledTools.includes(s))
             const someOn = slugs.some((s) => enabledTools.includes(s))
             return (
               <div key={pack} className="mb-4 rounded-lg border border-gray-200 overflow-hidden bg-white">
@@ -368,38 +423,54 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
                       {slugs.filter((s) => enabledTools.includes(s)).length}/{slugs.length} enabled
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (allOn) {
-                        setEnabledTools((prev) => prev.filter((t) => !slugs.includes(t)))
-                      } else {
-                        setEnabledTools((prev) => Array.from(new Set([...prev, ...slugs])))
-                      }
-                      setSaved(false)
-                    }}
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${colors.border} ${colors.text} hover:opacity-80 transition-opacity`}
-                  >
-                    {allOn ? 'Disable All' : someOn ? 'Enable All' : 'Enable All'}
-                  </button>
+                  {availableSlugs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (allAvailableOn) {
+                          setEnabledTools((prev) => prev.filter((t) => !availableSlugs.includes(t)))
+                        } else {
+                          setEnabledTools((prev) => Array.from(new Set([...prev, ...availableSlugs])))
+                        }
+                        setSelectedPreset('custom')
+                        setSaved(false)
+                      }}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${colors.border} ${colors.text} hover:opacity-80 transition-opacity`}
+                    >
+                      {allAvailableOn ? 'Disable All' : someOn ? 'Enable All' : 'Enable All'}
+                    </button>
+                  )}
                 </div>
                 <div className="divide-y divide-gray-50">
                   {slugs.map((slug) => {
                     const def = TOOL_DEFS[slug]
-                    const on = enabledTools.includes(slug)
+                    const isAvailable = availableOptionalTools.has(slug)
+                    const on = isAvailable && enabledTools.includes(slug)
                     return (
-                      <div key={slug} className="flex items-center gap-3 px-4 py-3">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={on}
-                          onClick={() => toggleTool(slug)}
-                          className={`w-8 h-5 rounded-full transition-colors flex-shrink-0 flex items-center px-0.5 ${
-                            on ? 'bg-indigo-500 justify-end' : 'bg-gray-200 justify-start'
-                          }`}
-                        >
-                          <div className="w-4 h-4 rounded-full bg-white shadow" />
-                        </button>
+                      <div
+                        key={slug}
+                        className={`flex items-center gap-3 px-4 py-3 ${!isAvailable ? 'opacity-50' : ''}`}
+                      >
+                        {isAvailable ? (
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={on}
+                            onClick={() => toggleTool(slug)}
+                            className={`w-8 h-5 rounded-full transition-colors flex-shrink-0 flex items-center px-0.5 ${
+                              on ? 'bg-indigo-500 justify-end' : 'bg-gray-200 justify-start'
+                            }`}
+                          >
+                            <div className="w-4 h-4 rounded-full bg-white shadow" />
+                          </button>
+                        ) : (
+                          <div
+                            className="w-8 h-5 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-start px-0.5 flex-shrink-0 cursor-not-allowed"
+                            title="Integration coming soon"
+                          >
+                            <div className="w-4 h-4 rounded-full bg-gray-300 shadow-sm" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={`text-sm font-semibold ${on ? 'text-gray-900' : 'text-gray-400'}`}>
@@ -408,9 +479,15 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${colors.bg} ${colors.text} border ${colors.border}`}>
                               {def.phase}
                             </span>
-                            <span className="text-[10px] text-gray-400 font-mono">
-                              ~${(def.hitRate * def.avgCostWhenRun).toFixed(3)}/lead avg
-                            </span>
+                            {!isAvailable ? (
+                              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                Coming Soon
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 font-mono">
+                                ~${(def.hitRate * def.avgCostWhenRun).toFixed(3)}/lead avg
+                              </span>
+                            )}
                           </div>
                           <p className={`text-xs mt-0.5 ${on ? 'text-gray-500' : 'text-gray-300'}`}>{def.description}</p>
                         </div>
@@ -427,7 +504,7 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Estimated Cost Per Lead</span>
-            <span className="text-xs text-emerald-600">Based on typical waterfall hit rates</span>
+            <span className="text-xs text-emerald-600">Based on live tools only</span>
           </div>
           <div className="flex items-end gap-4">
             <div>
@@ -446,24 +523,29 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
             </div>
           </div>
           <p className="text-[11px] text-emerald-600 mt-2">
-            The waterfall stops early when data is found — most leads cost significantly less than worst case.
-            {enabledTools.length === 0 && ' Add tools above to get more complete data.'}
+            Cost reflects currently live tools only. The waterfall stops early when data is found — most leads cost less than worst case.
           </p>
         </div>
 
-        {/* Tools active count */}
+        {/* Footer summary */}
         <div className="flex items-center justify-between text-xs text-gray-400">
           <span>
             {REQUIRED_TOOLS.length + enabledTools.length} tools active
             {' · '}
-            {Object.keys(TOOL_DEFS).length - enabledTools.length} optional tools disabled
+            {Array.from(availableOptionalTools).filter((t) => !enabledTools.includes(t)).length} available but disabled
+            {' · '}
+            {Object.keys(TOOL_DEFS).length - availableOptionalTools.size} coming soon
           </span>
           <button
             type="button"
-            onClick={() => { setEnabledTools(Object.keys(TOOL_DEFS)); setSaved(false) }}
+            onClick={() => {
+              setEnabledTools(Array.from(availableOptionalTools))
+              setSelectedPreset('custom')
+              setSaved(false)
+            }}
             className="text-indigo-500 hover:text-indigo-700 font-medium"
           >
-            Enable all
+            Enable all live
           </button>
         </div>
       </div>
