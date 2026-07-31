@@ -40,6 +40,7 @@ export interface EnrichmentPipelineResult {
   enriched_data: Record<string, unknown>
   sources_used: string[]
   sources_skipped: string[]
+  source_errors?: Record<string, string>
 }
 
 function mergeField<T>(existing: T | undefined, incoming: T | undefined): T | undefined {
@@ -88,6 +89,7 @@ export async function runEnrichmentPipeline(
 ): Promise<EnrichmentPipelineResult> {
   const sources_used: string[] = []
   const sources_skipped: string[] = []
+  const source_errors: Record<string, string> = {}
 
   // ── Gate check ───────────────────────────────────────────────────────────
   if (!lead.email && !lead.phone && !lead.linkedinUrl) {
@@ -132,6 +134,7 @@ export async function runEnrichmentPipeline(
       ed = { ...ed, ...lushaFormatted, lusha_raw: lushaResult.person }
       sources_used.push('lusha')
     } else {
+      if (lushaResult.error) source_errors['lusha'] = lushaResult.error
       ed = { ...ed, lusha_raw: null }
       sources_used.push('lusha')
     }
@@ -168,6 +171,8 @@ export async function runEnrichmentPipeline(
         linkedinUrl = pdlResult.data.pdl_linkedin as string
         ed.linkedin_url = linkedinUrl
       }
+    } else if (pdlResult.error) {
+      source_errors['pdl'] = pdlResult.error
     }
     sources_used.push('pdl') // ran (data found or not)
   } else {
@@ -324,11 +329,13 @@ export async function runEnrichmentPipeline(
   // ── Consolidate: add merged summary fields ────────────────────────────────
   ed.all_phones = getAllPhones(ed, lead.phone)
   ed.all_emails = getAllEmails(ed, lead.email)
+  if (Object.keys(source_errors).length > 0) ed.source_errors = source_errors
 
   return {
     gate_passed: true,
     enriched_data: ed,
     sources_used,
     sources_skipped,
+    source_errors,
   }
 }

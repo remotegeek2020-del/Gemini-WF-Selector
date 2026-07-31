@@ -51,6 +51,9 @@ export async function pdlEnrichPerson(
     })
 
     if (res.status === 404) return { data: null, raw: null }
+    if (res.status === 402 || res.status === 429) {
+      return { data: null, raw: null, error: `PDL quota exceeded (${res.status}) — add credits at app.peopledatalabs.com` }
+    }
     if (!res.ok) {
       const text = await res.text()
       return { data: null, raw: null, error: `PDL API error ${res.status}: ${text}` }

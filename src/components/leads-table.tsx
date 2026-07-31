@@ -87,16 +87,21 @@ function renderEnrichVal(v: unknown): React.ReactNode {
   return <span className="text-xs text-gray-800">{String(v)}</span>
 }
 
-function ToolSection({ tool, data }: { tool: string; data: Record<string, unknown> }) {
+function ToolSection({ tool, data, error }: { tool: string; data: Record<string, unknown>; error?: string }) {
   const meta = TOOL_META[tool]
   const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))
+  const isQuotaError = error && (error.includes('quota') || error.includes('402') || error.includes('429'))
   if (entries.length === 0) return (
     <div>
       <div className="flex items-center gap-1.5 mb-1.5">
         <span className={`text-[10px] font-bold uppercase tracking-wider ${meta?.color ?? 'text-gray-500'}`}>{meta?.label ?? tool}</span>
         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta?.badgeCls ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>{meta?.phase ?? ''}</span>
+        {isQuotaError && <span className="text-[10px] px-1.5 py-0.5 rounded border font-semibold bg-red-50 text-red-600 border-red-200">Quota exceeded</span>}
       </div>
-      <p className="text-xs text-gray-400 italic">Ran — no data returned</p>
+      {isQuotaError
+        ? <p className="text-xs text-red-500 italic">API credits exhausted — add credits to resume</p>
+        : <p className="text-xs text-gray-400 italic">Ran — no data returned</p>
+      }
     </div>
   )
   return (
@@ -205,6 +210,7 @@ function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, un
   const ed = enrichedData
   const sourcesUsed = (ed.sources_used as string[] | undefined) || []
   const sourcesSkipped = (ed.sources_skipped as string[] | undefined) || []
+  const sourceErrors = (ed.source_errors as Record<string, string> | undefined) || {}
   const hasWaterfall = sourcesUsed.length > 0 || sourcesSkipped.length > 0
 
   // Legacy leads (no sources_used): fall back to old Apollo/Lusha display
@@ -262,7 +268,7 @@ function EnrichmentWaterfall({ enrichedData }: { enrichedData: Record<string, un
       <div className="grid grid-cols-2 gap-x-6 gap-y-4">
         {sourcesUsed.map((tool) => {
           const data = getToolData(tool, ed)
-          return data ? <ToolSection key={tool} tool={tool} data={data} /> : null
+          return data ? <ToolSection key={tool} tool={tool} data={data} error={sourceErrors[tool]} /> : null
         })}
       </div>
     </div>
