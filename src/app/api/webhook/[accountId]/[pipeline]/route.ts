@@ -170,7 +170,7 @@ async function enrichLead(accountId: string, leadId: string, pipeline: string, p
   const hotLeadCriteria = (accountData?.hot_lead_criteria || null) as HotLeadCriteria | null
   const enabledTools = (accountData?.tool_config as { enabled_tools?: string[] } | null)?.enabled_tools ?? null
 
-  const REQUIRED_ENRICHMENT_TOOLS = ['apollo', 'enrow']
+  const REQUIRED_ENRICHMENT_TOOLS = ['apollo']
   const ek = (service: string) => {
     if (enabledTools !== null && !REQUIRED_ENRICHMENT_TOOLS.includes(service) && !enabledTools.includes(service)) return undefined
     return agencyEnrichKeys?.[service] || undefined

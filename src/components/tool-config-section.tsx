@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
-const REQUIRED_TOOLS = ['apollo', 'enrow'] as const
+const REQUIRED_TOOLS = ['apollo'] as const
 
 interface ToolDef {
   name: string
@@ -66,9 +66,14 @@ const TOOL_DEFS: Record<string, ToolDef> = {
     description: 'SMTP-verifies before returning — only sends back emails that will actually deliver.',
     pack: 'email', phase: 'Phase 4', hitRate: 0.12, avgCostWhenRun: 0.08,
   },
+  enrow: {
+    name: 'Enrow',
+    description: 'Verifies every collected email address for deliverability at the end of the waterfall. Negligible cost.',
+    pack: 'email', phase: 'Phase 5', hitRate: 0.80, avgCostWhenRun: 0.006,
+  },
 }
 
-const BASE_COST = 0.035 + 0.006  // apollo + enrow
+const BASE_COST = 0.035  // apollo only
 
 // ── Bundle presets ────────────────────────────────────────────────────────────
 
@@ -386,7 +391,6 @@ export default function ToolConfigSection({ accountId }: { accountId: string }) 
             <div className="divide-y divide-gray-50">
               {[
                 { slug: 'apollo', name: 'Apollo.io', desc: 'Seeds the entire waterfall — provides identity, LinkedIn URL, company, and title.', phase: 'Phase 1' },
-                { slug: 'enrow', name: 'Enrow', desc: 'Verifies every collected email address for deliverability. Negligible cost.', phase: 'Phase 5' },
               ].map((t) => (
                 <div key={t.slug} className="flex items-center gap-3 px-4 py-3">
                   <div className="w-8 h-5 rounded-full bg-indigo-500 flex items-center justify-end px-0.5 flex-shrink-0 cursor-not-allowed opacity-80">
