@@ -234,6 +234,23 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
     }
   }
 
+  const hasAnyCriteria =
+    criteria.requireDecisionMaker || criteria.requireVpOrAbove || criteria.requireDirectorOrAbove ||
+    criteria.requireManagerOrAbove || criteria.titleKeywords?.trim() || (criteria.titleRoles?.length ?? 0) > 0 ||
+    criteria.titleRolesOther?.trim() || criteria.minEmployees || criteria.maxEmployees || criteria.minRevenue ||
+    criteria.requireFunding || criteria.maxFoundedYearsAgo || (criteria.targetIndustries?.length ?? 0) > 0 ||
+    criteria.targetIndustriesOther?.trim() || (criteria.excludeIndustries?.length ?? 0) > 0 ||
+    criteria.excludeIndustriesOther?.trim() || criteria.requireVerifiedEmail || criteria.requirePhone ||
+    criteria.requireLinkedin || criteria.requireMultipleContactMethods || criteria.maxPdlVerifiedMonths ||
+    criteria.minEnrichmentSources || (criteria.targetStates?.length ?? 0) > 0 || criteria.targetCities?.trim() ||
+    criteria.targetCountries?.trim() || criteria.excludeLocations?.trim() || criteria.recentJobChangeMonths ||
+    criteria.minYearsInRole || criteria.minCompaniesWorked || criteria.requireCareerGrowth ||
+    criteria.previousNotableCompanies?.trim() || criteria.careerSignalsOther?.trim() ||
+    criteria.requireCompanyLinkedin || criteria.requireCompanyPhone || criteria.requireCompanyWebsite ||
+    criteria.companyHq?.trim() || criteria.companyKeywords?.trim() || criteria.companySignalsOther?.trim() ||
+    criteria.requirePaidAd || criteria.requireOrganicSearch || criteria.requireUtmCampaign?.trim() ||
+    criteria.requireFormName?.trim() || criteria.leadSourceOther?.trim() || criteria.customInstructions?.trim()
+
   if (loading) return null
 
   return (
@@ -255,6 +272,26 @@ export default function HotLeadCriteriaSection({ accountId }: { accountId: strin
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+
+          {/* Default fallback notice */}
+          {!hasAnyCriteria ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Using Default AI Criteria</p>
+              <p className="text-sm text-amber-800 mb-2">No criteria configured. The AI will use its built-in defaults to decide what's a hot lead:</p>
+              <ul className="text-sm text-amber-900 space-y-1 list-none">
+                <li>• <strong>Decision-making authority</strong> — Owner, CEO, President, VP, Director, C-level, Managing Partner, Principal</li>
+                <li>• <strong>Persona fit</strong> — company size and industry matches the assigned persona well</li>
+                <li>• <strong>Direct match</strong> — lead was matched to a persona directly, not via default fallback</li>
+                <li>• <strong>Rich profile</strong> — meaningful data available (title, company, LinkedIn)</li>
+              </ul>
+              <p className="text-xs text-amber-600 mt-2">Configure criteria below to override these defaults with rules specific to this account.</p>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 flex items-center gap-2">
+              <span className="text-green-600 text-base">✓</span>
+              <p className="text-sm text-green-800 font-medium">Custom criteria active — AI will use your rules below instead of the built-in defaults.</p>
+            </div>
+          )}
 
           {/* Scoring Threshold — always visible at top */}
           <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 space-y-2">
