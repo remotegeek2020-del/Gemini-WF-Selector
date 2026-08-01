@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { generateLeadsCSV } from '@/lib/reports/csv'
+import { buildReportEmailContent } from '@/lib/reports/email-template'
 import type { Lead } from '@/types'
 
 function getPipelineLabel(slug: string): string {
@@ -77,10 +78,11 @@ export async function POST(
     return NextResponse.json({ error: 'Postmark From Email not configured. Add it in Settings → Notifications.' }, { status: 400 })
   }
 
-  // Fetch all leads matching filters (paginated)
+  // Fetch all matching leads
   const allLeads: Lead[] = []
   const BATCH = 1000
   let offset = 0
+  const resolvedPipeline = pipeline || 'all'
 
   while (true) {
     let query = supabase
@@ -90,7 +92,7 @@ export async function POST(
       .order('created_at', { ascending: false })
       .range(offset, offset + BATCH - 1)
 
-    if (pipeline && pipeline !== 'all') query = query.eq('pipeline', pipeline)
+    if (resolvedPipeline !== 'all') query = query.eq('pipeline', resolvedPipeline)
     if (hotOnly) query = query.eq('is_hot', true)
     if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00.000Z`)
     if (dateTo) query = query.lte('created_at', `${dateTo}T23:59:59.999Z`)
@@ -110,75 +112,34 @@ export async function POST(
     return NextResponse.json({ error: 'No leads found for the selected filters and date range.' }, { status: 404 })
   }
 
-  // Sort: hot leads first
+  // Sort hot leads first
   allLeads.sort((a, b) => {
     if (a.is_hot && !b.is_hot) return -1
     if (!a.is_hot && b.is_hot) return 1
     return 0
   })
 
-  // Generate CSV and encode
-  const csvContent = generateLeadsCSV(allLeads)
-  const csvBase64 = Buffer.from(csvContent, 'utf-8').toString('base64')
-
-  // Build labels for email
-  const hotCount = allLeads.filter((l) => l.is_hot).length
-  const pipelineLabel = pipeline && pipeline !== 'all' ? getPipelineLabel(pipeline) : 'All Channels'
+  // Build date label
   const dateLabel = dateFrom && dateTo
     ? `${dateFrom} – ${dateTo}`
     : dateFrom ? `From ${dateFrom}`
     : dateTo ? `Through ${dateTo}`
     : 'All Time'
-  const fileName = `leads-report-${dateFrom || 'all'}-to-${dateTo || 'now'}-${new Date().toISOString().slice(0, 10)}.csv`
-  const subject = `Lead Report — ${pipelineLabel} — ${dateLabel} (${allLeads.length} lead${allLeads.length !== 1 ? 's' : ''})`
 
-  const htmlBody = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #111827;">
-  <div style="padding: 32px 0 16px;">
-    <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">Lead Router</p>
-    <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #111827;">Lead Report</h1>
-  </div>
+  // Build rich email
+  const { html, text, subject } = buildReportEmailContent({
+    leads: allLeads,
+    pipeline: resolvedPipeline,
+    dateLabel,
+    hotOnly: hotOnly ?? false,
+    generatedAt: new Date(),
+  })
 
-  <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin: 0 0 24px; display: flex; gap: 32px; flex-wrap: wrap;">
-    <div style="min-width: 80px;">
-      <p style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af;">Total Leads</p>
-      <p style="margin: 0; font-size: 28px; font-weight: 700; color: #111827;">${allLeads.length}</p>
-    </div>
-    ${hotCount > 0 ? `
-    <div style="min-width: 80px;">
-      <p style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af;">Hot Leads 🔥</p>
-      <p style="margin: 0; font-size: 28px; font-weight: 700; color: #ea580c;">${hotCount}</p>
-    </div>
-    ` : ''}
-    <div style="min-width: 100px;">
-      <p style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af;">Channel</p>
-      <p style="margin: 0; font-size: 15px; font-weight: 600; color: #374151;">${pipelineLabel}</p>
-    </div>
-    <div>
-      <p style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af;">Date Range</p>
-      <p style="margin: 0; font-size: 15px; font-weight: 600; color: #374151;">${dateLabel}</p>
-    </div>
-  </div>
-
-  <p style="margin: 0 0 8px; color: #374151; font-size: 14px; line-height: 1.6;">
-    The attached CSV contains full enrichment data for all ${allLeads.length} lead${allLeads.length !== 1 ? 's' : ''}, including contact info, company intelligence, enrichment sources, and AI routing notes${hotCount > 0 ? `, with ${hotCount} hot lead${hotCount !== 1 ? 's' : ''} sorted to the top` : ''}.
-  </p>
-
-  <p style="margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af;">
-    Sent by Lead Router · ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-  </p>
-</div>`.trim()
-
-  const textBody = [
-    `Lead Report — ${pipelineLabel}`,
-    `Date Range: ${dateLabel}`,
-    `Total Leads: ${allLeads.length}`,
-    hotCount > 0 ? `Hot Leads: ${hotCount}` : '',
-    '',
-    'Full enrichment data is attached as a CSV file.',
-    '',
-    `Sent by Lead Router`,
-  ].filter((l) => l !== null).join('\n')
+  // Generate CSV attachment
+  const csvContent = generateLeadsCSV(allLeads)
+  const csvBase64 = Buffer.from(csvContent, 'utf-8').toString('base64')
+  const pipelineLabel = getPipelineLabel(resolvedPipeline)
+  const fileName = `leads-${pipelineLabel.toLowerCase().replace(/\s+/g, '-')}-${dateFrom || 'all'}-to-${dateTo || 'now'}.csv`
 
   // Send to all recipients in parallel
   const results = await Promise.all(
@@ -194,37 +155,31 @@ export async function POST(
           From: `${fromName} <${fromEmail}>`,
           To: to,
           Subject: subject,
-          HtmlBody: htmlBody,
-          TextBody: textBody,
+          HtmlBody: html,
+          TextBody: text,
           MessageStream: 'outbound',
-          Attachments: [
-            {
-              Name: fileName,
-              Content: csvBase64,
-              ContentType: 'text/csv',
-            },
-          ],
+          Attachments: [{ Name: fileName, Content: csvBase64, ContentType: 'text/csv' }],
         }),
       }).then(async (r) => {
-        const rb = await r.json()
+        const rb = await r.json().catch(() => ({}))
         return { to, ok: r.ok, error: r.ok ? null : rb }
       }).catch((e) => ({ to, ok: false, error: String(e) }))
     )
   )
 
   const succeeded = results.filter((r) => r.ok)
-  const failed = results.filter((r) => !r.ok)
+  const hotCount = allLeads.filter((l) => l.is_hot).length
 
   if (succeeded.length === 0) {
     return NextResponse.json({
       error: 'Failed to send report — check your Postmark configuration.',
-      details: failed[0]?.error,
+      details: results[0]?.error,
     }, { status: 500 })
   }
 
   return NextResponse.json({
     success: true,
-    message: `Report sent to ${succeeded.length} recipient${succeeded.length !== 1 ? 's' : ''} — ${allLeads.length} lead${allLeads.length !== 1 ? 's' : ''} attached${hotCount > 0 ? `, including ${hotCount} hot lead${hotCount !== 1 ? 's' : ''}` : ''}.`,
+    message: `Report sent to ${succeeded.length} recipient${succeeded.length !== 1 ? 's' : ''} — ${allLeads.length} lead${allLeads.length !== 1 ? 's' : ''}${hotCount > 0 ? `, ${hotCount} hot` : ''} attached.`,
     leadCount: allLeads.length,
     hotCount,
     recipientCount: succeeded.length,

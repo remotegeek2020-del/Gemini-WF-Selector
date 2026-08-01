@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { ReportSummary, PersonaReport, Lead } from '@/types'
+import type { ReportSchedule } from '@/lib/reports/schedule'
+import { frequencyLabel, dateRangeLabel } from '@/lib/reports/schedule'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 
@@ -290,6 +292,276 @@ function EmailReportModal({ accountId, activePipeline, pipelines, onClose }: Ema
   )
 }
 
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const DATE_RANGE_OPTIONS = [
+  { value: 1, label: 'Last 24 hours' },
+  { value: 7, label: 'Last 7 days' },
+  { value: 14, label: 'Last 14 days' },
+  { value: 30, label: 'Last 30 days' },
+  { value: 90, label: 'Last 90 days' },
+  { value: null, label: 'All time' },
+]
+
+interface ScheduleModalProps {
+  accountId: string
+  pipelines: { slug: string }[]
+  activePipeline: string
+  onClose: () => void
+  onSaved: () => void
+}
+
+function ScheduleModal({ accountId, pipelines, activePipeline, onClose, onSaved }: ScheduleModalProps) {
+  const [label, setLabel] = useState('')
+  const [pipeline, setPipeline] = useState(activePipeline)
+  const [hotOnly, setHotOnly] = useState(false)
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const [hourUtc, setHourUtc] = useState(8)
+  const [dayOfWeek, setDayOfWeek] = useState(1)
+  const [dayOfMonth, setDayOfMonth] = useState(1)
+  const [dateRangeDays, setDateRangeDays] = useState<number | null>(7)
+  const [recipients, setRecipients] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSave = async () => {
+    const emails = recipients.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+    if (emails.length === 0) { setError('At least one recipient is required'); return }
+    setIsSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/report-schedules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: label.trim() || undefined,
+          pipeline,
+          hot_only: hotOnly,
+          frequency,
+          hour_utc: hourUtc,
+          day_of_week: frequency === 'weekly' ? dayOfWeek : undefined,
+          day_of_month: frequency === 'monthly' ? dayOfMonth : undefined,
+          date_range_days: dateRangeDays,
+          recipients: emails,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Failed to create schedule'); return }
+      onSaved()
+      onClose()
+    } catch {
+      setError('Failed to create schedule')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-xl">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">New Scheduled Report</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Sent automatically with CSV attachment</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Name <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input
+              type="text"
+              placeholder="e.g. Weekly hot leads for sales team"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {pipelines.length > 1 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Channel</label>
+              <select
+                value={pipeline}
+                onChange={(e) => setPipeline(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">All Channels</option>
+                {pipelines.map((p) => <option key={p.slug} value={p.slug}>{getPipelineLabel(p.slug)}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">Report Type</label>
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+              <button onClick={() => setHotOnly(false)} className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${!hotOnly ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>All Leads</button>
+              <button onClick={() => setHotOnly(true)} className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${hotOnly ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500'}`}>🔥 Hot Leads Only</button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">Frequency</label>
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+              {(['daily', 'weekly', 'monthly'] as const).map((f) => (
+                <button key={f} onClick={() => setFrequency(f)} className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium capitalize transition-colors ${frequency === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{f}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {frequency === 'weekly' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Day of Week</label>
+                <select
+                  value={dayOfWeek}
+                  onChange={(e) => setDayOfWeek(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                </select>
+              </div>
+            )}
+            {frequency === 'monthly' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Day of Month</label>
+                <select
+                  value={dayOfMonth}
+                  onChange={(e) => setDayOfMonth(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Send Time (UTC)</label>
+              <select
+                value={hourUtc}
+                onChange={(e) => setHourUtc(Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {Array.from({ length: 24 }, (_, h) => {
+                  const ampm = h >= 12 ? 'PM' : 'AM'
+                  const label = `${h % 12 || 12}:00 ${ampm}`
+                  return <option key={h} value={h}>{label} UTC</option>
+                })}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Date Range per Report</label>
+            <select
+              value={dateRangeDays ?? ''}
+              onChange={(e) => setDateRangeDays(e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {DATE_RANGE_OPTIONS.map((o) => (
+                <option key={o.label} value={o.value ?? ''}>{o.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">How far back each report covers</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Recipients</label>
+            <textarea
+              rows={3}
+              placeholder="email@example.com&#10;another@example.com"
+              value={recipients}
+              onChange={(e) => setRecipients(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">One per line or comma-separated · non-users welcome</p>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">{error}</div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white rounded-b-xl">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !recipients.trim()}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 transition-colors"
+          >
+            {isSaving ? 'Creating…' : 'Create Schedule'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface ScheduleListProps {
+  accountId: string
+  schedules: ReportSchedule[]
+  onChanged: () => void
+}
+
+function ScheduleList({ accountId, schedules, onChanged }: ScheduleListProps) {
+  const toggle = async (s: ReportSchedule) => {
+    await fetch(`/api/accounts/${accountId}/report-schedules/${s.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: !s.is_active }),
+    })
+    onChanged()
+  }
+
+  const del = async (id: string) => {
+    if (!confirm('Delete this schedule?')) return
+    await fetch(`/api/accounts/${accountId}/report-schedules/${id}`, { method: 'DELETE' })
+    onChanged()
+  }
+
+  if (schedules.length === 0) {
+    return (
+      <p className="text-sm text-gray-400 py-4 text-center">No schedules yet — click "Add Schedule" to create one.</p>
+    )
+  }
+
+  return (
+    <div className="divide-y divide-gray-100">
+      {schedules.map((s) => (
+        <div key={s.id} className="flex items-start justify-between py-3 gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {s.label || (s.hot_only ? '🔥 Hot Leads' : 'All Leads')} · {getPipelineLabel(s.pipeline)}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">{frequencyLabel(s)} · {dateRangeLabel(s.date_range_days)}</p>
+            <p className="text-xs text-gray-400 mt-0.5 truncate">{s.recipients.join(', ')}</p>
+            {s.last_sent_at && (
+              <p className="text-xs text-gray-400 mt-0.5">Last sent: {new Date(s.last_sent_at).toLocaleString()}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => toggle(s)}
+              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${s.is_active ? 'bg-indigo-600' : 'bg-gray-200'}`}
+              title={s.is_active ? 'Pause schedule' : 'Resume schedule'}
+            >
+              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform mt-0.5 ${s.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+            <button onClick={() => del(s.id)} className="text-gray-300 hover:text-red-500 transition-colors" title="Delete">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function SubAccountReportsPage() {
   const [accountId, setAccountId] = useState<string | null>(null)
   const [summary, setSummary] = useState<ReportSummary | null>(null)
@@ -301,6 +573,19 @@ export default function SubAccountReportsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLeadsLoading, setIsLeadsLoading] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [schedules, setSchedules] = useState<ReportSchedule[]>([])
+
+  const fetchSchedules = useCallback(async () => {
+    if (!accountId) return
+    const res = await fetch(`/api/accounts/${accountId}/report-schedules`)
+    if (res.ok) {
+      const d = await res.json()
+      setSchedules(d.schedules || [])
+    }
+  }, [accountId])
+
+  useEffect(() => { fetchSchedules() }, [fetchSchedules])
 
   useEffect(() => {
     const getAccountId = async () => {
@@ -395,12 +680,30 @@ export default function SubAccountReportsPage() {
           onClose={() => setShowEmailModal(false)}
         />
       )}
+      {showScheduleModal && accountId && (
+        <ScheduleModal
+          accountId={accountId}
+          pipelines={pipelineBreakdown}
+          activePipeline={activePipeline}
+          onClose={() => setShowScheduleModal(false)}
+          onSaved={fetchSchedules}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
           <p className="text-sm text-gray-500 mt-1">Lead enrichment and persona assignment summary</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowScheduleModal(true)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-400 bg-white rounded-lg px-3 py-2 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Schedule{schedules.length > 0 ? ` (${schedules.length})` : ''}
+          </button>
           <button
             onClick={() => setShowEmailModal(true)}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 hover:border-gray-400 bg-white rounded-lg px-3 py-2 transition-colors"
@@ -540,6 +843,25 @@ export default function SubAccountReportsPage() {
           </table>
         </div>
       </Card>
+
+      {schedules.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Scheduled Reports</CardTitle>
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+              >+ Add Schedule</button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {accountId && (
+              <ScheduleList accountId={accountId} schedules={schedules} onChanged={fetchSchedules} />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
