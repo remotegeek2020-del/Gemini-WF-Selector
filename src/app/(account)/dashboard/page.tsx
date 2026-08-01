@@ -19,6 +19,9 @@ export default function SubAccountDashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [activePipeline, setActivePipeline] = useState<string>('main')
   const [pipelines, setPipelines] = useState<Pipeline[]>([])
+  const [search, setSearch] = useState<string>('')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 50
   const [error, setError] = useState<string | null>(null)
   const [deepLinkedLead, setDeepLinkedLead] = useState<Lead | null>(null)
 
@@ -63,8 +66,13 @@ export default function SubAccountDashboardPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ limit: '100', pipeline: activePipeline })
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(page * PAGE_SIZE),
+        pipeline: activePipeline,
+      })
       if (statusFilter) params.set('status', statusFilter)
+      if (search.trim()) params.set('search', search.trim())
 
       const res = await fetch(`/api/accounts/${accountId}/leads?${params}`)
       if (!res.ok) throw new Error('Failed to fetch leads')
@@ -76,7 +84,10 @@ export default function SubAccountDashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [accountId, statusFilter, activePipeline])
+  }, [accountId, statusFilter, activePipeline, search, page])
+
+  // Reset to page 0 when filters change
+  useEffect(() => { setPage(0) }, [statusFilter, activePipeline, search])
 
   useEffect(() => {
     if (accountId) fetchLeads()
@@ -147,7 +158,7 @@ export default function SubAccountDashboardPage() {
           onDelete={accountId ? async (id, name) => { await handleDelete(id); closeDeepLink() } : undefined}
         />
       )}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -186,6 +197,27 @@ export default function SubAccountDashboardPage() {
         </div>
       </div>
 
+      {/* Search bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search by name, email, or phone…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
+      </div>
+
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           {error}
@@ -194,7 +226,24 @@ export default function SubAccountDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Leads</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Leads</CardTitle>
+            {total > PAGE_SIZE && (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <span>{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50 text-xs"
+                >← Prev</button>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={(page + 1) * PAGE_SIZE >= total}
+                  className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50 text-xs"
+                >Next →</button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (

@@ -27,7 +27,8 @@ export async function GET(
   const status = searchParams.get('status')
   const personaId = searchParams.get('persona_id')
   const pipeline = searchParams.get('pipeline') || 'main'
-  const limit = parseInt(searchParams.get('limit') || '50', 10)
+  const search = searchParams.get('search')?.trim() || ''
+  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 1000)
   const offset = parseInt(searchParams.get('offset') || '0', 10)
 
   let query = supabase
@@ -38,9 +39,13 @@ export async function GET(
     .range(offset, offset + limit - 1)
 
   if (pipeline !== 'all') query = query.eq('pipeline', pipeline)
-
   if (status) query = query.eq('status', status)
   if (personaId) query = query.eq('assigned_persona_id', personaId)
+  if (search) {
+    query = query.or(
+      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
+    )
+  }
 
   const { data, error, count } = await query
 

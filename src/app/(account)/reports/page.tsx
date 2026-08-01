@@ -120,14 +120,22 @@ export default function SubAccountReportsPage() {
       if (!accountId) return
       setIsLeadsLoading(true)
       try {
-        const queryParams = new URLSearchParams({ limit: '100', pipeline: activePipeline })
-        if (personaId && personaId !== 'unassigned') {
-          queryParams.set('persona_id', personaId)
+        // Fetch ALL leads by paginating — no artificial cap
+        const allLeads: Lead[] = []
+        const BATCH = 1000
+        let offset = 0
+        while (true) {
+          const qp = new URLSearchParams({ limit: String(BATCH), offset: String(offset), pipeline: activePipeline })
+          if (personaId && personaId !== 'unassigned') qp.set('persona_id', personaId)
+          const res = await fetch(`/api/accounts/${accountId}/leads?${qp}`)
+          if (!res.ok) throw new Error('Failed to fetch leads')
+          const data = await res.json()
+          const batch: Lead[] = data.leads || []
+          allLeads.push(...batch)
+          if (batch.length < BATCH) break
+          offset += BATCH
         }
-        const res = await fetch(`/api/accounts/${accountId}/leads?${queryParams}`)
-        if (!res.ok) throw new Error('Failed to fetch leads')
-        const data = await res.json()
-        setLeads(data.leads || [])
+        setLeads(allLeads)
       } catch (err) {
         console.error(err)
       } finally {
