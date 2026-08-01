@@ -31,23 +31,78 @@ function StatCard({ title, value, color }: StatCardProps) {
   )
 }
 
-function exportLeadsCSV(leads: Lead[], personaName?: string) {
+function exportLeadsCSV(leads: Lead[], personaName?: string, hotOnly?: boolean) {
+  const filtered = hotOnly ? leads.filter((l) => l.is_hot) : leads
+  const sorted = [...filtered].sort((a, b) => {
+    if (a.is_hot && !b.is_hot) return -1
+    if (!a.is_hot && b.is_hot) return 1
+    return 0
+  })
+
+  const headers = [
+    'Pipeline', 'Hot Lead', 'Hot Reason',
+    'First Name', 'Last Name', 'Email', 'Phone',
+    'All Phones', 'All Emails', 'Verified Emails',
+    'Company', 'Title', 'Seniority', 'Department', 'Location',
+    'Industry', 'Company Size', 'Company Revenue', 'Company Founded',
+    'LinkedIn URL', 'Twitter',
+    'Sources Used',
+    'Persona', 'Status', 'Source', 'Created',
+  ]
+
   const rows = [
-    ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Title', 'LinkedIn Profile', 'Persona', 'Status', 'Source', 'Created'],
-    ...leads.map((lead) => {
+    headers,
+    ...sorted.map((lead) => {
       const ed = (lead.enriched_data || {}) as Record<string, unknown>
       const apolloRaw = (ed.apollo_raw || {}) as Record<string, unknown>
       const company = (ed.current_company as string) || (apolloRaw.organization as Record<string,string> | undefined)?.name || ''
       const title = (ed.title as string) || (apolloRaw.title as string) || ''
       const linkedin = (ed.linkedin_url as string) || (apolloRaw.linkedin_url as string) || (ed.hl_linkedin_url as string) || ''
+      const twitter = (ed.twitter_url as string) || (ed.twitter as string) || ''
+      const seniority = (ed.seniority as string) || ''
+      const dept = Array.isArray(ed.departments)
+        ? (ed.departments as string[]).join('; ')
+        : (ed.department as string) || ''
+      const location = [ed.city, ed.state, ed.country].filter(Boolean).join(', ')
+      const industry = (ed.industry as string) || ''
+      const companySize = (ed.company_employee_count as string | number) || (ed.company_size as string | number) || ''
+      const companyRevenue = (ed.company_annual_revenue as string | number) || ''
+      const companyFounded = (ed.company_founded_year as string | number) || ''
+      const allPhones = Array.isArray(ed.all_phones)
+        ? (ed.all_phones as Array<Record<string, unknown>>).map((p) => (p.number || p.value || '') as string).filter(Boolean).join('; ')
+        : ''
+      const allEmails = Array.isArray(ed.all_emails)
+        ? (ed.all_emails as Array<Record<string, unknown>>).map((e) => (e.email || e.value || '') as string).filter(Boolean).join('; ')
+        : ''
+      const verifiedEmails = Array.isArray(ed.verified_emails)
+        ? (ed.verified_emails as string[]).join('; ')
+        : ''
+      const sourcesUsed = Array.isArray(ed.sources_used)
+        ? (ed.sources_used as string[]).join('; ')
+        : ''
       return [
+        getPipelineLabel(lead.pipeline || 'main'),
+        lead.is_hot ? 'Yes' : 'No',
+        lead.hot_reasoning || '',
         lead.first_name || '',
         lead.last_name || '',
         lead.email || '',
         lead.phone || '',
+        allPhones,
+        allEmails,
+        verifiedEmails,
         company,
         title,
+        seniority,
+        dept,
+        location,
+        industry,
+        String(companySize),
+        String(companyRevenue),
+        String(companyFounded),
         linkedin,
+        twitter,
+        sourcesUsed,
         lead.personas?.name || '',
         lead.status,
         lead.source || '',
@@ -64,7 +119,8 @@ function exportLeadsCSV(leads: Lead[], personaName?: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `leads${personaName ? `-${personaName.replace(/\s+/g, '-')}` : ''}-${new Date().toISOString().slice(0, 10)}.csv`
+  const suffix = hotOnly ? '-hot-leads' : (personaName ? `-${personaName.replace(/\s+/g, '-')}` : '')
+  a.download = `leads${suffix}-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -300,6 +356,24 @@ export default function AccountReportsPage({ params }: { params: { accountId: st
                 : 'All Leads'}
             </CardTitle>
             <div className="flex items-center gap-3">
+              {leads.some((l) => l.is_hot) && (
+                <button
+                  onClick={() =>
+                    exportLeadsCSV(
+                      leads,
+                      personaReports.find((p) => p.persona_id === selectedPersonaId)?.persona_name,
+                      true
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-800 border border-orange-200 hover:border-orange-400 rounded-md px-3 py-1.5 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                  </svg>
+                  Export Hot Leads
+                </button>
+              )}
               {leads.length > 0 && (
                 <button
                   onClick={() =>
@@ -313,7 +387,7 @@ export default function AccountReportsPage({ params }: { params: { accountId: st
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Export CSV
+                  Export All CSV
                 </button>
               )}
               {selectedPersonaId && (
