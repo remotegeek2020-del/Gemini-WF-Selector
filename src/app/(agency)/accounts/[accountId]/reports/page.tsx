@@ -130,6 +130,172 @@ function getPipelineLabel(slug: string): string {
   return labels[slug] || slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+interface EmailReportModalProps {
+  accountId: string
+  activePipeline: string
+  pipelines: { slug: string }[]
+  onClose: () => void
+}
+
+function EmailReportModal({ accountId, activePipeline, pipelines, onClose }: EmailReportModalProps) {
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [hotOnly, setHotOnly] = useState(false)
+  const [pipeline, setPipeline] = useState(activePipeline)
+  const [recipients, setRecipients] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null)
+
+  const handleSend = async () => {
+    const emails = recipients.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+    if (emails.length === 0) return
+    setIsSending(true)
+    setResult(null)
+    try {
+      const res = await fetch(`/api/accounts/${accountId}/reports/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipients: emails,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          hotOnly,
+          pipeline,
+        }),
+      })
+      const data = await res.json()
+      setResult(res.ok ? { success: true, message: data.message } : { error: data.error || 'Failed to send report' })
+    } catch {
+      setResult({ error: 'Failed to send report' })
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Send Report by Email</h2>
+            <p className="text-xs text-gray-500 mt-0.5">CSV with full enrichment data will be attached</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">From Date</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">To Date</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {pipelines.length > 1 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Channel</label>
+              <select
+                value={pipeline}
+                onChange={(e) => setPipeline(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">All Channels</option>
+                {pipelines.map((p) => (
+                  <option key={p.slug} value={p.slug}>{getPipelineLabel(p.slug)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">Report Type</label>
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => setHotOnly(false)}
+                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${!hotOnly ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                All Leads
+              </button>
+              <button
+                onClick={() => setHotOnly(true)}
+                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-colors ${hotOnly ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                🔥 Hot Leads Only
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Recipients</label>
+            <textarea
+              rows={3}
+              placeholder="email@example.com&#10;another@example.com"
+              value={recipients}
+              onChange={(e) => setRecipients(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">One per line or comma-separated · non-users welcome</p>
+          </div>
+
+          {result && (
+            <div className={`p-3 rounded-lg text-sm border ${result.success ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+              {result.success ? result.message : result.error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">
+            {result?.success ? 'Close' : 'Cancel'}
+          </button>
+          {!result?.success && (
+            <button
+              onClick={handleSend}
+              disabled={isSending || !recipients.trim()}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {isSending ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Send Report
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AccountReportsPage({ params }: { params: { accountId: string } }) {
   const { accountId } = params
   const [summary, setSummary] = useState<ReportSummary | null>(null)
@@ -140,6 +306,7 @@ export default function AccountReportsPage({ params }: { params: { accountId: st
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [isLeadsLoading, setIsLeadsLoading] = useState(false)
+  const [showEmailModal, setShowEmailModal] = useState(false)
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -209,23 +376,42 @@ export default function AccountReportsPage({ params }: { params: { accountId: st
 
   return (
     <div className="space-y-6">
+      {showEmailModal && (
+        <EmailReportModal
+          accountId={accountId}
+          activePipeline={activePipeline}
+          pipelines={pipelineBreakdown}
+          onClose={() => setShowEmailModal(false)}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
           <p className="text-sm text-gray-500 mt-1">Lead enrichment and persona assignment summary</p>
         </div>
-        {pipelineBreakdown.length > 1 && (
-          <select
-            value={activePipeline}
-            onChange={(e) => { setActivePipeline(e.target.value); setSelectedPersonaId('') }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowEmailModal(true)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 hover:border-gray-400 bg-white rounded-lg px-3 py-2 transition-colors"
           >
-            <option value="all">All Channels</option>
-            {pipelineBreakdown.map((p) => (
-              <option key={p.slug} value={p.slug}>{getPipelineLabel(p.slug)}</option>
-            ))}
-          </select>
-        )}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Email Report
+          </button>
+          {pipelineBreakdown.length > 1 && (
+            <select
+              value={activePipeline}
+              onChange={(e) => { setActivePipeline(e.target.value); setSelectedPersonaId('') }}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Channels</option>
+              {pipelineBreakdown.map((p) => (
+                <option key={p.slug} value={p.slug}>{getPipelineLabel(p.slug)}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
       {/* Channel breakdown */}

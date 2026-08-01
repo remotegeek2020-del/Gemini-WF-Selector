@@ -28,6 +28,8 @@ export async function GET(
   const personaId = searchParams.get('persona_id')
   const pipeline = searchParams.get('pipeline') || 'main'
   const search = searchParams.get('search')?.trim() || ''
+  const dateFrom = searchParams.get('date_from')
+  const dateTo = searchParams.get('date_to')
   const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 1000)
   const offset = parseInt(searchParams.get('offset') || '0', 10)
 
@@ -41,6 +43,8 @@ export async function GET(
   if (pipeline !== 'all') query = query.eq('pipeline', pipeline)
   if (status) query = query.eq('status', status)
   if (personaId) query = query.eq('assigned_persona_id', personaId)
+  if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00.000Z`)
+  if (dateTo) query = query.lte('created_at', `${dateTo}T23:59:59.999Z`)
   if (search) {
     query = query.or(
       `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
