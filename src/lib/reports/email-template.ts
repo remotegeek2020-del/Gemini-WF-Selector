@@ -170,6 +170,10 @@ export function buildReportEmailContent(opts: ReportEmailOptions): { html: strin
           <p style="margin:0 0 2px;font-size:14px;font-weight:700;color:#111827;">${name}${title ? ` <span style="font-weight:400;color:#6b7280;">· ${title}</span>` : ''}${company ? ` <span style="font-weight:600;color:#374151;">@ ${company}</span>` : ''}</p>
           ${lead.email ? `<p style="margin:2px 0;font-size:12px;color:#6b7280;">📧 ${lead.email}${phone ? ` &nbsp;·&nbsp; 📱 ${phone}` : ''}</p>` : ''}
           ${linkedin ? `<p style="margin:2px 0;font-size:12px;color:#6b7280;">🔗 ${linkedin}</p>` : ''}
+          <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">
+            ${lead.pipeline ? `<span style="background:#f3f4f6;border-radius:4px;padding:1px 6px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">${getPipelineLabel(lead.pipeline)}</span>` : ''}
+            ${lead.source ? ` &nbsp;·&nbsp; via ${lead.source}` : ''}
+          </p>
           ${lead.hot_reasoning ? `<p style="margin:6px 0 0;font-size:12px;color:#92400e;font-style:italic;line-height:1.4;">"${lead.hot_reasoning}"</p>` : ''}
         </td></tr>
         </table>`
@@ -357,6 +361,7 @@ export function buildReportEmailContent(opts: ReportEmailOptions): { html: strin
           `${name}${title ? ` · ${title}` : ''}${company ? ` @ ${company}` : ''}`,
           l.email ? `  Email: ${l.email}` : '',
           l.phone ? `  Phone: ${l.phone}` : '',
+          (l.pipeline || l.source) ? `  Channel: ${[l.pipeline ? getPipelineLabel(l.pipeline) : '', l.source ? `via ${l.source}` : ''].filter(Boolean).join(' ')}` : '',
           l.hot_reasoning ? `  Reason: ${l.hot_reasoning}` : '',
         ].filter(Boolean).join('\n')
       }),
