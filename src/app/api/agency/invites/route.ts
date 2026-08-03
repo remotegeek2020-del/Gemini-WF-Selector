@@ -35,6 +35,29 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Exclude invites for emails that already have an active user_roles entry
+  const { data: existingRoles } = await admin
+    .from('user_roles')
+    .select('user_id')
+
+  if (existingRoles && existingRoles.length > 0) {
+    const activeUserIds = new Set(existingRoles.map((r: { user_id: string }) => r.user_id))
+
+    // Get emails of active users
+    const { data: { users: activeUsers } } = await admin.auth.admin.listUsers({ perPage: 1000 })
+    const activeEmails = new Set(
+      activeUsers
+        .filter((u) => activeUserIds.has(u.id))
+        .map((u) => u.email?.toLowerCase())
+        .filter(Boolean)
+    )
+
+    const filtered = (invites ?? []).filter(
+      (inv: { email: string }) => !activeEmails.has(inv.email.toLowerCase())
+    )
+    return NextResponse.json({ invites: filtered })
+  }
+
   return NextResponse.json({ invites: invites ?? [] })
 }
 
