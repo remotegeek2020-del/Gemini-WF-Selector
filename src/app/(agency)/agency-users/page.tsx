@@ -48,6 +48,47 @@ export default function AgencyUsersPage() {
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [resendSuccess, setResendSuccess] = useState<string | null>(null)
 
+  const [setPasswordUser, setSetPasswordUser] = useState<AgencyUser | null>(null)
+  const [tempPassword, setTempPassword] = useState('')
+  const [isSettingPassword, setIsSettingPassword] = useState(false)
+  const [setPasswordError, setSetPasswordError] = useState<string | null>(null)
+  const [setPasswordSuccess, setSetPasswordSuccess] = useState<string | null>(null)
+  const [passwordCopied, setPasswordCopied] = useState(false)
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$'
+    return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  }
+
+  const openSetPassword = (u: AgencyUser) => {
+    setSetPasswordUser(u)
+    setTempPassword(generatePassword())
+    setSetPasswordError(null)
+    setSetPasswordSuccess(null)
+    setPasswordCopied(false)
+  }
+
+  const handleSetPassword = async () => {
+    if (!setPasswordUser || !tempPassword) return
+    setIsSettingPassword(true)
+    setSetPasswordError(null)
+    setSetPasswordSuccess(null)
+    try {
+      const res = await fetch(`/api/agency/users/${setPasswordUser.user_id}/set-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: tempPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to set password')
+      setSetPasswordSuccess(`Password updated for ${setPasswordUser.email}. Share it securely — they can change it after logging in.`)
+    } catch (err) {
+      setSetPasswordError(err instanceof Error ? err.message : 'Failed to set password')
+    } finally {
+      setIsSettingPassword(false)
+    }
+  }
+
   const fetchData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -233,14 +274,23 @@ export default function AgencyUsersPage() {
                             )}
                           </td>
                           <td className="py-3 text-right">
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              onClick={() => handleDeleteUser(u.user_id)}
-                              isLoading={deletingUserId === u.user_id}
-                            >
-                              Remove
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openSetPassword(u)}
+                              >
+                                Set Password
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDeleteUser(u.user_id)}
+                                isLoading={deletingUserId === u.user_id}
+                              >
+                                Remove
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -292,6 +342,75 @@ export default function AgencyUsersPage() {
             </Card>
           </div>
         )}
+
+        {/* Set Temp Password Modal */}
+        <Modal
+          isOpen={!!setPasswordUser}
+          onClose={() => setSetPasswordUser(null)}
+          title="Set Temporary Password"
+          size="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Setting a temporary password for <strong>{setPasswordUser?.email}</strong>. Share it securely — they can change it after logging in.
+            </p>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Temporary Password</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={tempPassword}
+                  onChange={(e) => setTempPassword(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTempPassword(generatePassword())}
+                  className="px-3 py-2 text-xs text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  title="Generate new password"
+                >
+                  ↺
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(tempPassword)
+                    setPasswordCopied(true)
+                    setTimeout(() => setPasswordCopied(false), 2000)
+                  }}
+                  className="px-3 py-2 text-xs text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  {passwordCopied ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Min 8 characters — click ↺ to generate a new one</p>
+            </div>
+
+            {setPasswordError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {setPasswordError}
+              </div>
+            )}
+
+            {setPasswordSuccess && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                {setPasswordSuccess}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setSetPasswordUser(null)}>
+                {setPasswordSuccess ? 'Close' : 'Cancel'}
+              </Button>
+              {!setPasswordSuccess && (
+                <Button onClick={handleSetPassword} isLoading={isSettingPassword} disabled={tempPassword.length < 8}>
+                  Set Password
+                </Button>
+              )}
+            </div>
+          </div>
+        </Modal>
 
         <Modal
           isOpen={isModalOpen}
